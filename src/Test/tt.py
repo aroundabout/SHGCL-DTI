@@ -1,10 +1,10 @@
-import scipy.io
-import urllib.request
+from node2vec import Node2Vec
+import networkx as nx
+import dgl
 
-# data_url = 'https://data.dgl.ai/dataset/ACM.mat'
-data_file_path = 'ACM.mat'
+G = nx.petersen_graph()
 
-# urllib.request.urlretrieve(data_url, data_file_path)
-data = scipy.io.loadmat(data_file_path)
-print(list(data.keys()))
-
+n2v = Node2Vec(G, dimensions=128, walk_length=20, workers=6)
+print("start fit")
+model = n2v.fit()
+model.wv.save_word2vec_format("n2vtest.bin")
