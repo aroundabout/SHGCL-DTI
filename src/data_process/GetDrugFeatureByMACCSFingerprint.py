@@ -32,7 +32,7 @@ def PCFP_BitString(pcfp_base64):
     return pcfp_bitstring
 
 
-def saveTxt(features: list, path="../../data/feature/drug_feature.txt"):
+def saveTxt(features: list, path="../../data/feature/drug_feature_167.txt"):
     with open(path, "w") as f:
         for feature in features:
             f.write(feature + '\n')

@@ -60,103 +60,6 @@ def getProteinSequence(UniportId: str) -> str:
     return GetProteinSequence(UniportId.strip())
 
 
-def _mean(listvalue):
-    return sum(listvalue) / len(listvalue)
-
-
-def _std(listvalue, ddof=1):
-    mean = _mean(listvalue)
-    temp = [math.pow(i - mean, 2) for i in listvalue]
-    res = math.sqrt(sum(temp) / (len(listvalue) - ddof))
-    return res
-
-
-def NormalizeEachAAP(AAP):
-    Result = {}
-    if len(AAP.values()) != 20:
-        print('You can not input the correct number of properities of Amino acids!')
-    else:
-        for i, j in AAP.items():
-            Result[i] = (j - _mean(AAP.values())) / _std(AAP.values(), ddof=0)
-
-    return Result
-
-
-def _GetCorrelationFunctionForAPAAC(Ri='S', Rj='D', AAP=[_Hydrophobicity, _hydrophilicity]):
-    Hydrophobicity = NormalizeEachAAP(AAP[0])
-    hydrophilicity = NormalizeEachAAP(AAP[1])
-    theta1 = round(Hydrophobicity[Ri] * Hydrophobicity[Rj], 3)
-    theta2 = round(hydrophilicity[Ri] * hydrophilicity[Rj], 3)
-    return theta1, theta2
-
-
-def _GetCorrelationFunction(Ri='S', Rj='D', AAP=[_Hydrophobicity, _hydrophilicity, _residuemass]):
-    Hydrophobicity = NormalizeEachAAP(AAP[0])
-    hydrophilicity = NormalizeEachAAP(AAP[1])
-    residuemass = NormalizeEachAAP(AAP[2])
-    theta1 = math.pow(Hydrophobicity[Ri] - Hydrophobicity[Rj], 2)
-    theta2 = math.pow(hydrophilicity[Ri] - hydrophilicity[Rj], 2)
-    theta3 = math.pow(residuemass[Ri] - residuemass[Rj], 2)
-    theta = round((theta1 + theta2 + theta3) / 3.0, 3)
-    return theta
-
-
-def _GetSequenceOrderCorrelationFactor(ProteinSequence, k=1):
-    LengthSequence = len(ProteinSequence)
-    res = []
-    for i in range(LengthSequence - k):
-        AA1 = ProteinSequence[i]
-        AA2 = ProteinSequence[i + k]
-        res.append(_GetCorrelationFunction(AA1, AA2))
-    result = round(sum(res) / (LengthSequence - k), 3)
-    return result
-
-
-def GetAAComposition(ProteinSequence):
-    LengthSequence = len(ProteinSequence)
-    Result = {}
-    for i in AALetter:
-        Result[i] = round(float(ProteinSequence.count(i)) / LengthSequence * 100, 3)
-    return Result
-
-
-def _GetPseudoAAC1(ProteinSequence, lamda=10, weight=0.05):
-    rightpart = 0.0
-    for i in range(lamda):
-        rightpart = rightpart + _GetSequenceOrderCorrelationFactor(ProteinSequence, k=i + 1)
-    AAC = GetAAComposition(ProteinSequence)
-
-    result = {}
-    temp = 1 + weight * rightpart
-    for index, i in enumerate(AALetter):
-        result['PAAC' + str(index + 1)] = round(AAC[i] / temp, 3)
-    return result
-
-
-def _GetPseudoAAC2(ProteinSequence, lamda=10, weight=0.05):
-    rightpart = []
-    for i in range(lamda):
-        rightpart.append(_GetSequenceOrderCorrelationFactor(ProteinSequence, k=i + 1))
-    result = {}
-    temp = 1 + weight * sum(rightpart)
-    for index in range(20, 20 + lamda):
-        result['PAAC' + str(index + 1)] = round(weight * rightpart[index - 20] / temp * 100, 3)
-    return result
-
-
-def _GetPseudoAAC(ProteinSequence, lamda=0, weight=0.05):
-    res = collections.OrderedDict()
-    res.update(_GetPseudoAAC1(ProteinSequence, lamda=lamda, weight=weight))
-    res.update(_GetPseudoAAC2(ProteinSequence, lamda=lamda, weight=weight))
-    return res
-
-
-## PAAC
-def GetPAAC(proteinSequence, lamda=44, weight=0.05):
-    res = _GetPseudoAAC(proteinSequence, lamda=lamda, weight=weight)
-    return res
-
-
 # 二肽
 def CalculateDipeptideComposition(ProteinSequence):
     # 400
@@ -294,6 +197,46 @@ def setRedirectProtein():
     saveTxt(feature, path="../../data/feature/protein_feature_full.txt")
 
 
+def getProteinFinalFeature():
+    # 1.加载csv和txt构建字典
+    # 2.protein.txt读取key
+    # 3.生成feature
+    seqs = dict()
+
+    df = pd.read_csv("../../data/feature/protein_sequence.csv")
+    for index, row in df.iterrows():
+        seqs[row["uniportId"]] = row["sequence"]
+    f = open("../../data/feature/RedirectMap.txt", "r")
+    lines = f.readlines()
+    for line in lines:
+        kv = line.strip("\n").split(" ")
+        seqs[kv[0]] = kv[1]
+    pf = open("../../data/data/protein.txt")
+    proteins = pf.readlines()
+    protein_feature = []
+    lostProtein = []
+    redirectMap2 = []
+    for protein in proteins:
+        protein = protein.strip("\n")
+        # if protein not in seqs.keys():
+        #     try:
+        #         tempseq = GetProteinSequence(protein)
+        #         redirectMap2.append(protein + " " + tempseq)
+        #         print(protein+" "+tempseq)
+        #         continue
+        #     except:
+        #         print("error, 300 ", protein)
+        #         lostProtein.append(protein)
+        #         continue
+        seq = seqs[protein]
+        if not seq.isalpha():
+            seq = getProteinSequence(seq)
+        protein_feature.append(getProteinFeature(seq))
+
+    saveTxt(protein_feature, "../../data/feature/protein_feature_420.txt")
+    # saveTxt(redirectMap2, "../../data/feature/RedirectMap2.txt")
+
+
 if __name__ == "__main__":
     # test()
-    setRedirectProtein()
+    getProteinFinalFeature()

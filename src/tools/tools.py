@@ -1,5 +1,46 @@
 import numpy as np
 import dgl
+from dgl.heterograph import DGLHeteroGraph
+
+DR_DR_V = 'drug_drug virtual'
+PR_PR_V = 'protein_protein virtual'
+DI_DI_V = 'disease_disease virtual'
+SE_SE_V = 'sideeffect_sideeffect virtual'
+
+DR_PR_I = 'drug_protein interaction'
+PR_DR_I = 'protein_drug interaction'
+
+DR_DR_A = 'drug_drug association'
+DR_PR_A = 'drug_protein association'
+DR_DI_A = 'drug_disease association'
+DR_SE_A = 'drug_sideeffect association'
+
+PR_DR_A = 'protein_drug association'
+PR_PR_A = 'protein_protein association'
+PR_DI_A = 'protein_disease association'
+PR_SE_A = 'protein_sideeffect association'
+
+DI_DR_A = 'disease_drug association'
+DI_PR_A = 'disease_protein association'
+DI_DI_A = 'disease_disease association'
+DI_SE_A = 'disease_sideeffect association'
+
+SE_DR_A = 'sideeffect_drug association'
+SE_PR_A = 'sideeffect_protein association'
+SE_DI_A = 'sideeffect_disease association'
+SE_SE_A = 'sideeffect_sideeffect association'
+
+drug = 'drug'
+protein = 'protein'
+disease = 'disease'
+sideeffect = 'sideeffect'
+
+
+def saveTxt(features: list[str], path: str):
+    with open(path, "w") as f:
+        for feature in features:
+            f.write(feature + '\n')
+    print("feature txt save finished")
 
 
 def load_data():
@@ -36,7 +77,7 @@ def load_data():
 
 
 def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                   protein_disease, drug_protein):
+                   protein_disease, drug_protein) -> DGLHeteroGraph:
     num_drug = len(drug_drug)
     num_protein = len(protein_protein)
     num_disease = len(drug_disease.T)
@@ -70,6 +111,10 @@ def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, prot
             if protein_protein[row, col] > 0:
                 list_PPI.append((row, col))
 
+    list_SESEI = []
+
+    list_DIDII = []
+
     list_drug_protein = []
     list_protein_drug = []
     for row in range(num_drug):
@@ -102,37 +147,107 @@ def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, prot
                 list_protein_disease.append((row, col))
                 list_disease_protein.append((col, row))
 
-    g_HIN = dgl.heterograph({('disease', 'disease_disease virtual', 'disease'): list_disease,
-                             ('drug', 'drug_drug virtual', 'drug'): list_drug,
-                             ('protein', 'protein_protein virtual', 'protein'): list_protein,
-                             ('sideeffect', 'sideeffect_sideeffect virtual', 'sideeffect'): list_sideeffect,
-                             ('drug', 'drug_drug interaction', 'drug'): list_DDI, \
-                             ('protein', 'protein_protein interaction', 'protein'): list_PPI, \
-                             ('drug', 'drug_protein interaction', 'protein'): list_drug_protein, \
-                             ('protein', 'protein_drug interaction', 'drug'): list_protein_drug, \
-                             ('drug', 'drug_sideeffect association', 'sideeffect'): list_drug_sideeffect, \
-                             ('sideeffect', 'sideeffect_drug association', 'drug'): list_sideeffect_drug, \
-                             ('drug', 'drug_disease association', 'disease'): list_drug_disease, \
-                             ('disease', 'disease_drug association', 'drug'): list_disease_drug, \
-                             ('protein', 'protein_disease association', 'disease'): list_protein_disease, \
-                             ('disease', 'disease_protein association', 'protein'): list_disease_protein})
+    list_protein_sideeffect = []
+    list_sideeffect_protein = []
 
-    g = g_HIN.edge_type_subgraph(['drug_drug interaction', 'protein_protein interaction',
-                                  'drug_protein interaction', 'protein_drug interaction',
-                                  'drug_sideeffect association', 'sideeffect_drug association',
-                                  'drug_disease association', 'disease_drug association',
-                                  'protein_disease association', 'disease_protein association'
+    list_disease_sideeffect = []
+    list_sideeffect_disease = []
+
+    list_drug_protein_a = []
+    list_protein_drug_a = []
+
+    g_HIN = dgl.heterograph({('disease', DI_DI_V, 'disease'): list_disease,
+                             ('drug', DR_DR_V, 'drug'): list_drug,
+                             ('protein', PR_PR_V, 'protein'): list_protein,
+                             ('sideeffect', SE_SE_V, 'sideeffect'): list_sideeffect,
+
+                             ('drug', DR_DR_A, 'drug'): list_DDI,
+                             ('drug', DR_PR_I, 'protein'): list_drug_protein,
+                             ('drug', DR_PR_A, 'protein'): list_drug_protein_a,
+                             ('drug', DR_SE_A, 'sideeffect'): list_drug_sideeffect,
+                             ('drug', DR_DI_A, 'disease'): list_drug_disease,
+
+                             ('protein', PR_DR_I, 'drug'): list_protein_drug,
+                             ('protein', PR_DR_A, 'drug'): list_protein_drug_a,
+                             ('protein', PR_PR_A, 'protein'): list_PPI,
+                             ('protein', PR_SE_A, 'sideeffect'): list_protein_sideeffect,
+                             ('protein', PR_DI_A, 'disease'): list_protein_disease,
+
+                             ('sideeffect', SE_DR_A, 'drug'): list_sideeffect_drug,
+                             ('sideeffect', SE_PR_A, 'protein'): list_sideeffect_protein,
+                             ('sideeffect', SE_SE_A, 'sideeffect'): list_SESEI,
+                             ('sideeffect', SE_DI_A, 'disease'): list_sideeffect_disease,
+
+                             ('disease', DI_DR_A, 'drug'): list_disease_drug,
+                             ('disease', DI_PR_A, 'protein'): list_disease_protein,
+                             ('disease', DI_SE_A, 'sideeffect'): list_disease_sideeffect,
+                             ('disease', DI_DI_A, 'disease'): list_DIDII,
+                             })
+
+    g = g_HIN.edge_type_subgraph([DR_DR_A, DR_PR_I, DR_PR_A, DR_SE_A, DR_DI_A,
+                                  PR_PR_A, PR_DR_I, PR_DR_A, PR_SE_A, PR_DI_A,
+                                  SE_DR_A, SE_PR_A, SE_DI_A, SE_SE_A,
+                                  DI_DR_A, DI_PR_A, DI_DI_A, DI_SE_A
                                   ])
 
     return g
 
 
-def saveTxt(features: list[str], path: str):
-    with open(path, "w") as f:
-        for feature in features:
-            f.write(feature + '\n')
-    print("feature txt save finished")
+def numConvert(num: int) -> str:
+    nid = num
+    # 在异构转同构的过程中,num_nodes_per_ntype为[5603,708,1512,4192] 分别对应di drug pro se
+    if num < 5603:
+        nid = "DI" + str(num)
+    elif 5603 <= num < 5603 + 708:
+        nid = "DR" + str(num - 5603)
+    elif 5603 + 708 <= num < 5603 + 708 + 1512:
+        nid = "PR" + str(num - 5603 - 708)
+    elif 5603 + 708 + 1512 <= num:
+        nid = "SE" + str(num - 5603 - 708 - 1512)
+    return nid
 
 
-if __name__ == "__main__":
-    print("tools.py")
+def ConstructGraphWithRW(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
+                         protein_disease, drug_protein):
+    g = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
+                       protein_disease, drug_protein)
+    g_homo = dgl.convert.to_homogeneous(g)
+    print("convert finish")
+    print(g_homo.nodes())
+    traces = dgl.sampling.node2vec_random_walk(g_homo, g_homo.nodes().numpy().tolist(), 1, 1, walk_length=40)
+    traces = traces.numpy().tolist()
+
+    rwDict = {'DR': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])},
+              'PR': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])},
+              'DI': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])},
+              'SE': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])}}
+    edgeNameDict = {'DR': {'DR': (drug, DR_DR_A, drug),
+                           'PR': (drug, DR_PR_A, protein),
+                           'DI': (drug, DR_DI_A, disease),
+                           'SE': (drug, DR_SE_A, sideeffect)},
+                    'PR': {'DR': (protein, PR_DR_A, drug),
+                           'PR': (protein, PR_PR_A, protein),
+                           'DI': (protein, PR_DI_A, disease),
+                           'SE': (protein, PR_SE_A, sideeffect)},
+                    'DI': {'DR': (disease, DI_DR_A, drug),
+                           'PR': (disease, DI_PR_A, protein),
+                           'DI': (disease, DI_DI_A, disease),
+                           'SE': (disease, DI_SE_A, sideeffect)},
+                    'SE': {'DR': (sideeffect, SE_DR_A, drug),
+                           'PR': (sideeffect, SE_PR_A, protein),
+                           'DI': (sideeffect, SE_DI_A, disease),
+                           'SE': (sideeffect, SE_SE_A, sideeffect)}}
+    for trace in traces:
+        src = numConvert(trace[0])
+        for index, num in enumerate(trace):
+            if index == 0:
+                continue
+            dst = numConvert(num)
+            rwDict[src[:2]][dst[:2]][0].append(int(src[2:]))
+            rwDict[src[:2]][dst[:2]][1].append(int(dst[2:]))
+
+    for k, firstdict in edgeNameDict.items():
+        for seck, edgename in firstdict.items():
+            g.add_edges(rwDict[k][seck][0], rwDict[k][seck][1], etype=edgename)
+    print("heterogarph with random walk finish")
+    return g
