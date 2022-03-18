@@ -1,18 +1,8 @@
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import dgl
-import dgl.function as fn
-from dgl.data.utils import generate_mask_tensor
-import numpy
-from sklearn.metrics import roc_auc_score, f1_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from src.model.GnnNet import GnnModel
-from dgl.nn.pytorch.conv.gatconv import GATConv
-from dgl.nn.pytorch.conv.relgraphconv import RelGraphConv
-from src.layers.SimpleHGNNew import SimpleHGNNew
 from tools.tools import ConstructGraph, load_data, ConstructGraphWithRW, \
     ConstructGraphOnlyWithRW, construct_negative_graph, compute_loss, predict_target_pair, \
     construct_test_graph, evaluate
