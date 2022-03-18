@@ -1,30 +1,13 @@
-import dgl
-import dgl.nn as dglnn
-import dgl.function as fn
-import numpy
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-import os
-import numpy as np
+import dgl
+import dgl.function as fn
+import numpy
 from dgl.nn.pytorch.conv.gatconv import GATConv
-from src.layers.SimpleHGN import SimpleHGNLayer
-from tools.tools import ConstructGraph, load_data, ConstructGraphWithRW
-
-drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, protein_disease, dti_original = load_data()
-
-# 构建异质图
-hetero_graph = ConstructGraphWithRW(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
-                              protein_sequence,
-                              protein_disease, dti_original)
-hetero_graph.nodes['disease'].data['feature'] = torch.from_numpy(
-    numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32)
-hetero_graph.nodes['drug'].data['feature'] = torch.from_numpy(
-    numpy.loadtxt("../../data/feature/drug_feature.txt")).to(torch.float32)
-hetero_graph.nodes['protein'].data['feature'] = torch.from_numpy(
-    numpy.loadtxt("../../data/feature/protein_feature.txt")).to(torch.float32)
-hetero_graph.nodes['sideeffect'].data['feature'] = torch.from_numpy(
-    numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32)
+from dgl.nn.pytorch.conv.relgraphconv import RelGraphConv
+from src.layers.SimpleHGNNew import SimpleHGNNew
+from tools.tools import ConstructGraph, load_data, ConstructGraphWithRW, ConstructGraphOnlyWithRW
 
 
 # randomly generate training masks on user nodes and click edges
@@ -51,17 +34,23 @@ def construct_negative_graph(graph, k, etype):
 class RGCN(nn.Module):
     def __init__(self, in_feats, hid_feats, out_feats, rel_names):
         super().__init__()
-        self.conv1 = SimpleHGNLayer({
-            rel: GATConv(in_feats, hid_feats, 3)
-            for rel in rel_names}, aggregate='att')
-        self.conv2 = SimpleHGNLayer({
-            rel: GATConv(hid_feats, out_feats, 1)
-            for rel in rel_names}, aggregate='att')
+        self.conv1 = RelGraphConv(in_feats, hid_feats, len(rel_names), activation=F.relu, self_loop=False)
+        self.conv2 = RelGraphConv(hid_feats, out_feats, len(rel_names), self_loop=False)
+        # self.conv1 = SimpleHGNNew(in_feats, hid_feats, 3)
+        # self.conv2 = SimpleHGNNew(hid_feats, out_feats, 1)
+        # self.conv1 = SimpleHGNLayer({
+        #     rel: GATConv(in_feats, hid_feats, 3)
+        #     for rel in rel_names}, aggregate='att')
+        # self.conv2 = SimpleHGNLayer({
+        #     rel: GATConv(hid_feats, out_feats, 1)
+        #     for rel in rel_names}, aggregate='att')
 
-    def forward(self, graph, inputs):
-        h = self.conv1(graph, inputs)
-        h = {k: F.relu(v) for k, v in h.items()}
-        h = self.conv2(graph, h)
+    def forward(self, graph, inputs, rel_types):
+        # inputs = torch.cat((inputs['disease'], inputs['drug'], inputs['protein'], inputs['sideeffect']), 0)
+        # graph = dgl.to_homogeneous(graph)
+        # graph = dgl.add_self_loop(graph)
+        h = self.conv1(graph, inputs, rel_types)
+        h = self.conv2(graph, h, rel_types)
         return h
 
 
@@ -82,8 +71,23 @@ def compute_loss(pos_score, neg_score):
     return (1 - pos_score.unsqueeze(1) + neg_score.view(n_edges, -1)).clamp(min=0).mean()
 
 
-k = 5
-model = Model(128, 256, 128, hetero_graph.etypes)
+drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, protein_disease, dti_original = load_data()
+
+# 构建异质图
+hetero_graph = ConstructGraphOnlyWithRW(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
+                                        protein_sequence,
+                                        protein_disease, dti_original)
+hetero_graph.nodes['disease'].data['feature'] = torch.from_numpy(
+    numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32)
+hetero_graph.nodes['drug'].data['feature'] = torch.from_numpy(
+    numpy.loadtxt("../../data/feature/drug_feature.txt")).to(torch.float32)
+hetero_graph.nodes['protein'].data['feature'] = torch.from_numpy(
+    numpy.loadtxt("../../data/feature/protein_feature.txt")).to(torch.float32)
+hetero_graph.nodes['sideeffect'].data['feature'] = torch.from_numpy(
+    numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32)
+
+k = 4
+model = Model(128, 64, 32, hetero_graph.etypes)
 drug_feats = hetero_graph.nodes['drug'].data['feature']
 protein_feats = hetero_graph.nodes['protein'].data['feature']
 disease_feats = hetero_graph.nodes['disease'].data['feature']
