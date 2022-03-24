@@ -5,29 +5,53 @@ import argparse
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='GRDTI')
+    parser = argparse.ArgumentParser(description='CoDTI')
 
-    parser.add_argument("--epochs", type=int, default=3000,
+    # model
+    parser.add_argument("--model", type=str, default='RGCN',
+                        help="model before MLP")
+
+
+    # 公用
+    parser.add_argument("--epochs", type=int, default=500,
                         help="number of training epochs")
-    parser.add_argument("--rounds", type=int, default=3,
+    parser.add_argument("--rounds", type=int, default=1,
                         help="number of training rounds")
-    parser.add_argument("--device", default='cuda',
-                        help="cuda or cpu")
-    parser.add_argument("--dim-embedding", type=int, default=128,
+    parser.add_argument("--out_dim", type=int, default=128,
                         help="dimension of embeddings")
-    parser.add_argument("--k", type=int, default=3,
-                        help="Number of iterations in propagation")
     parser.add_argument("--lr", type=float, default=0.001,
                         help="learning rate")
-    parser.add_argument('--weight-decay', type=float, default=0,
-                        help="weight decay")
-    parser.add_argument('--reg_lambda', type=float, default=1,
-                        help="reg_lambda")
-    parser.add_argument('--patience', type=int, default=6,
+    parser.add_argument('--l2',type=float,default=0.00,
+                        help="l2 parameter")
+    parser.add_argument('--patience', type=int, default=10,
                         help='Early stopping patience.')
-    parser.add_argument("--alpha", type=float, default=0.9,
+
+
+    parser.add_argument("--random_walk", type=bool, default=False,
+                        help="weather add the random walk edges")
+    parser.add_argument("--walk_length", type=int, default=40,
+                        help='random walk length')
+    parser.add_argument("--sim_matrix", type=bool, default=True,
+                        help="weather use the sim martrix of dr and pr")
+
+
+    # if use rwr
+    parser.add_argument("--alpha", type=float, default=0.7,
                         help="Restart Probability")
-    parser.add_argument("--edge-drop", type=float, default=0.5,
-                        help="edge dropout in propagation")
+
+
+    # attention
+    parser.add_argument("--feat_drop", type=float, default=0.0,
+                        help="feat dropout")
+    parser.add_argument("--attn_drop", type=float, default=0.0,
+                        help="attn drop")
+    parser.add_argument("--residual", type=bool, default=False,
+                        help="residual for attention")
+    parser.add_argument("--multi_head", type=int, default=3,
+                        help='multi_head')
+    # han
+    parser.add_argument("--dropout", type=int, default=0.6,
+                        help='multi_head')
+
 
     return parser.parse_args()

@@ -1,3 +1,7 @@
-list_drug = [(i, i) for i in range(708)]
-list_protein = [(i, i) for i in range(1512)]
-print(list_drug)
+import dgl
+import torch
+
+a = torch.randn(4, 3,3,3 ,5)
+print(a, a.size())
+b = torch.mean(a, (1,2,3), True).squeeze()
+print(b, b.size())
