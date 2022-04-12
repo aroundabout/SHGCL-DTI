@@ -1,9 +1,19 @@
+from random import random
+
 import numpy
 import numpy as np
 import dgl
+from dgl import convert
 from dgl.heterograph import DGLHeteroGraph
 import torch
 from sklearn.metrics import roc_auc_score, f1_score, average_precision_score
+from scipy.sparse import coo_matrix
+from src.tools.args import parse_args
+import torch as th
+
+args = parse_args()
+
+device = args.device
 
 DR_DR_V = 'drug_drug virtual'
 PR_PR_V = 'protein_protein virtual'
@@ -43,6 +53,11 @@ drug_len = 708
 protein_len = 1512
 sideeffect_len = 4192
 disease_len = 5603
+
+
+def get_meta_path():
+    return [[DR_PR_I, PR_DR_I], [DR_PR_A, PR_DR_A],
+            [DR_DI_A, DI_PR_A]]
 
 
 def saveTxt(features: list[str], path: str):
@@ -93,8 +108,17 @@ def splitGraph(g, offset=0):
     g.edges[DR_PR_I].data['test_mask'] = torch.from_numpy(test_mask)
 
 
+def sparse_mx_to_torch_sparse_tensor(sparse_mx):
+    """Convert a scipy sparse matrix to a torch sparse tensor."""
+    sparse_mx = sparse_mx.tocoo().astype(np.float32)
+    indices = torch.from_numpy(
+        np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
+    values = torch.from_numpy(sparse_mx.data)
+    shape = torch.Size(sparse_mx.shape)
+    return torch.sparse.FloatTensor(indices, values, shape)
+
+
 def load_feature():
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     disease_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
     drug_feats = torch.from_numpy(
@@ -109,7 +133,7 @@ def load_feature():
 
 
 def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                   protein_disease, drug_protein, args) -> DGLHeteroGraph:
+                   protein_disease, drug_protein, args, CO=False) -> DGLHeteroGraph:
     num_drug = len(drug_drug)
     num_protein = len(protein_protein)
     num_disease = len(drug_disease.T)
@@ -120,57 +144,35 @@ def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, prot
     list_sideeffect = [(i, i) for i in range(num_sideeffect)]
     list_disease = [(i, i) for i in range(num_disease)]
 
-    list_DDI = []
-    for row in range(num_drug):
-        for col in range(num_drug):
-            if drug_drug[row, col] > 0:
-                list_DDI.append((row, col))
-            if args.sim_matrix and drug_chemical[row, col] > 0.4:
-                list_DDI.append((row, col))
+    drug_chemical = np.array(drug_chemical)
+    drug_chemical[drug_chemical < 0.4] = 0
+    drug_drug = coo_matrix(drug_drug + drug_chemical)
+    list_DDI = (drug_drug.row, drug_drug.col)
 
-    list_PPI = []
-    for row in range(num_protein):
-        for col in range(num_protein):
-            if protein_protein[row, col] > 0:
-                list_PPI.append((row, col))
-            if args.sim_matrix and protein_sequence[row, col] > 0.6:
-                list_PPI.append((row, col))
+    protein_sequence = np.array(protein_sequence)
+    protein_sequence[protein_sequence < 0.6] = 0
+    protein_protein = coo_matrix(protein_protein + protein_sequence)
+    list_PPI = (protein_protein.row, protein_protein.col)
 
     list_SESEI = []
 
     list_DIDII = []
 
-    list_drug_protein = []
-    list_protein_drug = []
-    for row in range(num_drug):
-        for col in range(num_protein):
-            if drug_protein[row, col] > 0:
-                list_drug_protein.append((row, col))
-                list_protein_drug.append((col, row))
+    drug_protein = coo_matrix(drug_protein)
+    list_drug_protein = (drug_protein.row, drug_protein.col)
+    list_protein_drug = (drug_protein.col, drug_protein.row)
 
-    list_drug_sideeffect = []
-    list_sideeffect_drug = []
-    for row in range(num_drug):
-        for col in range(num_sideeffect):
-            if drug_sideeffect[row, col] > 0:
-                list_drug_sideeffect.append((row, col))
-                list_sideeffect_drug.append((col, row))
+    drug_sideeffect = coo_matrix(drug_sideeffect)
+    list_drug_sideeffect = (drug_sideeffect.row, drug_sideeffect.col)
+    list_sideeffect_drug = (drug_sideeffect.col, drug_sideeffect.row)
 
-    list_drug_disease = []
-    list_disease_drug = []
-    for row in range(num_drug):
-        for col in range(num_disease):
-            if drug_disease[row, col] > 0:
-                list_drug_disease.append((row, col))
-                list_disease_drug.append((col, row))
+    drug_disease = coo_matrix(drug_disease)
+    list_drug_disease = (drug_disease.row, drug_disease.col)
+    list_disease_drug = (drug_disease.col, drug_disease.row)
 
-    list_protein_disease = []
-    list_disease_protein = []
-    for row in range(num_protein):
-        for col in range(num_disease):
-            if protein_disease[row, col] > 0:
-                list_protein_disease.append((row, col))
-                list_disease_protein.append((col, row))
+    protein_disease = coo_matrix(protein_disease)
+    list_protein_disease = (protein_disease.row, protein_disease.col)
+    list_disease_protein = (protein_disease.col, protein_disease.row)
 
     list_protein_sideeffect = []
     list_sideeffect_protein = []
@@ -208,16 +210,17 @@ def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, prot
                              (disease, DI_SE_A, sideeffect): list_disease_sideeffect,
                              (disease, DI_DI_A, disease): list_DIDII,
                              })
-
-    g = g_HIN.edge_type_subgraph([DR_DR_A, DR_PR_I, DR_PR_A, DR_SE_A, DR_DI_A,
-                                  PR_PR_A, PR_DR_I, PR_DR_A, PR_SE_A, PR_DI_A,
-                                  SE_DR_A, SE_PR_A, SE_DI_A, SE_SE_A,
-                                  DI_DR_A, DI_PR_A, DI_DI_A, DI_SE_A
-                                  ])
-    # g.nodes[disease].data['feature'] = node_features[disease].cpu()
-    # g.nodes[drug].data['feature'] = node_features[drug].cpu()
-    # g.nodes[protein].data['feature'] = node_features[protein].cpu()
-    # g.nodes[sideeffect].data['feature'] = node_features[sideeffect].cpu()
+    if CO:
+        g = g_HIN.edge_type_subgraph([DR_DR_A, DR_PR_I, DR_SE_A, DR_DI_A,
+                                      PR_DR_I, PR_PR_A, PR_DI_A,
+                                      SE_DR_A,
+                                      DI_DR_A, DI_PR_A])
+    else:
+        g = g_HIN.edge_type_subgraph([DR_DR_A, DR_PR_I, DR_PR_A, DR_SE_A, DR_DI_A,
+                                      PR_PR_A, PR_DR_I, PR_DR_A, PR_SE_A, PR_DI_A,
+                                      SE_DR_A, SE_PR_A, SE_DI_A, SE_SE_A,
+                                      DI_DR_A, DI_PR_A, DI_DI_A, DI_SE_A
+                                      ])
     return g
 
 
@@ -325,7 +328,7 @@ def construct_negative_graph(graph, k, etype):
     return hetero_graph
 
 
-def construct_test_graph(dti, etype):
+def construct_postive_graph(dti, etype):
     utype, _, vtype = etype
     src, dst = dti
     list_drug = [(i, i) for i in range(drug_len)]
@@ -338,15 +341,15 @@ def construct_test_graph(dti, etype):
 
 
 def predict_target_pair(pos_h, neg_h):
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    pre = torch.cat((pos_h, neg_h), 0).to(device)
+    pre = torch.cat((pos_h, neg_h), 0).reshape(-1, 1).to(device)
     target = torch.cat(
         (torch.ones((len(pos_h), 1), dtype=torch.float), torch.zeros((len(neg_h), 1), dtype=torch.long)), 0).to(device)
+
     return pre, target
 
 
-def compute_loss(pre, target):
-    crossentropyloss = torch.nn.BCEWithLogitsLoss()
+def compute_loss(pre, target, pos_weight=None):
+    crossentropyloss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     return crossentropyloss(pre, target)
 
 
@@ -357,29 +360,94 @@ def binary_acc(preds, y):
     return acc
 
 
-def evaluate(model, test_graph, test_neg_graph, drug_feature, protein_feature, etype):
+def compute_score(pre, target, pos_weight=None):
+    loss = compute_loss(pre, target, pos_weight=pos_weight)
+    roc_auc = roc_auc_score(target.cpu().detach().numpy(), pre.cpu().detach().numpy())
+    aupr = average_precision_score(target.cpu().detach().numpy(), pre.cpu().detach().numpy())
+    return loss, roc_auc, aupr
+
+
+def shuffle(pos_h, neg_h):
+    h = torch.cat((pos_h, neg_h), 0).cpu()
+    label = torch.cat(
+        (torch.ones((len(pos_h), 1), dtype=torch.float), torch.zeros((len(neg_h), 1), dtype=torch.long)), 0)
+    # 打乱h,label
+    h = h.detach().numpy()
+    label = label.detach().numpy()
+
+    p = numpy.column_stack((h, label))
+    numpy.random.shuffle(p)
+
+    h = torch.from_numpy(p[:, :-1]).to(device)
+    label = torch.from_numpy(p[:, -1:]).to(device)
+    return h, label
+
+
+def concat_link(graph, neg_graph, feat_src, feat_dst, etype):
+    def concat_message_function(edges):
+        return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
+
+    with graph.local_scope():
+        graph.nodes['drug'].data['feature'] = feat_src
+        graph.nodes['protein'].data['feature'] = feat_dst
+        graph.apply_edges(concat_message_function, etype=etype)
+        pos_h = graph.edata.pop('cat_feat')
+    with neg_graph.local_scope():
+        neg_graph.nodes['drug'].data['feature'] = feat_src
+        neg_graph.nodes['protein'].data['feature'] = feat_dst
+        neg_graph.apply_edges(concat_message_function, etype=etype)
+        neg_h = neg_graph.edata.pop('cat_feat')
+
+    return pos_h, neg_h
+
+
+def evaluate(model, test_graph, test_neg_graph, drug_feature, protein_feature, etype, pos_weight=None):
     with torch.no_grad():
         def concat_message_function(edges):
             return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
 
         with test_graph.local_scope():
-            test_graph.nodes['drug'].data['feature']=drug_feature
-            test_graph.nodes['protein'].data['feature']=protein_feature
+            test_graph.nodes['drug'].data['feature'] = drug_feature
+            test_graph.nodes['protein'].data['feature'] = protein_feature
             test_graph.apply_edges(concat_message_function, etype=etype)
             pos_h = test_graph.edata.pop('cat_feat')
         with test_neg_graph.local_scope():
-            test_neg_graph.nodes['drug'].data['feature']=drug_feature
-            test_neg_graph.nodes['protein'].data['feature']=protein_feature
+            test_neg_graph.nodes['drug'].data['feature'] = drug_feature
+            test_neg_graph.nodes['protein'].data['feature'] = protein_feature
             test_neg_graph.apply_edges(concat_message_function, etype=etype)
             neg_h = test_neg_graph.edata.pop('cat_feat')
+        # 写法1
+        pre, target = predict_target_pair(model.pred(pos_h), model.pred(neg_h))
 
-        pos_score, neg_score = model.pred(pos_h), model.pred(neg_h)
+        # 写法2
+        # h, target = shuffle(pos_h, neg_h)
+        # pre = model.pred(h)
 
-        pre, target = predict_target_pair(pos_score, neg_score)
-        loss = compute_loss(pre, target)
-        roc_auc = roc_auc_score(target.cpu().detach().numpy(), pre.cpu().detach().numpy())
-        aupr = average_precision_score(target.cpu().detach().numpy(), pre.cpu().detach().numpy())
+        loss, roc_auc, aupr = compute_score(pre, target, pos_weight=pos_weight)
         pre_f1, target_f1 = torch.round(torch.sigmoid(pre.cpu())).detach().numpy(), \
                             torch.round(torch.sigmoid(target.cpu())).detach().numpy()
         f1 = f1_score(target_f1, pre_f1)
         return roc_auc, aupr, f1, loss
+
+
+def l2_norm(t, axit=1):
+    t = t.float()
+    norm = th.norm(t, 2, axit, True) + 1e-12
+    output = th.div(t, norm)
+    output[th.isnan(output) | th.isinf(output)] = 0.0
+    return output
+
+
+if __name__ == "__main__":
+    drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, protein_disease, dti_original = load_data()
+
+    # 构建异质图
+
+    hetero_graph = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
+                                  protein_sequence,
+                                  protein_disease, dti_original, args)
+
+    g = dgl.metapath_reachable_graph(hetero_graph, [PR_DI_A, DI_PR_A])
+    g1 = dgl.metapath_reachable_graph(hetero_graph, [DR_DI_A, DI_DR_A])
+
+    A = 1

@@ -2,7 +2,6 @@ import dgl
 import gensim.models
 from collections import OrderedDict
 import networkx as nx
-from node2vec import Node2Vec
 # import sys
 # sys.path.append("../../src")
 

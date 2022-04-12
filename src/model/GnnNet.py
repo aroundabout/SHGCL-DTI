@@ -1,8 +1,10 @@
+import dgl
 import torch
 import torch.nn as nn
-from src.layers.RGCN import RGCN
-from src.layers.RGAT import RGAT
+from src.layers.RGCNLayer import RGCN, RGAT
 from src.layers.MLPPredicator import MLPPredicator
+from src.layers.DistMulLayer import DistLayer
+from src.tools.tools import shuffle, predict_target_pair, get_meta_path
 
 
 class GnnModel(nn.Module):
@@ -18,27 +20,40 @@ class GnnModel(nn.Module):
             self.sage = RGAT(in_features, hidden_features, out_features, g.etypes, args)
         else:
             self.sage = RGCN(in_features, hidden_features, out_features, g.etypes, args)
-        self.pred = MLPPredicator(out_features * 2, 1)
 
-    def forward(self, g, neg_g, x, etype):
+        self.pred = MLPPredicator(out_features * 3 * 2, 1)
+        # self.pred = DistLayer(out_features * 3)
+
+    def forward(self, g, neg_g, x, etype, pos_g=None, drug_drug=None, drug_chemical=None, protein_protein=None,
+                protein_sequence=None, drug_protein=None):
+
         h = self.sage(g, x)
+
+        # return self.pred(drug_drug, drug_chemical, protein_protein, protein_sequence,
+        #                  drug_protein, h['drug'], h['protein'], pos_g, neg_g)
 
         def concat_message_function(edges):
             return {
-                'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']],len(edges.src['feature'].shape)-1)}
+                'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']],
+                                      len(edges.src['feature'].shape) - 1)}
 
-        with g.local_scope():
-            g.nodes['drug'].data['feature'] = h['drug']
-            g.nodes['protein'].data['feature'] = h['protein']
-            g.apply_edges(concat_message_function, etype=etype)
-            pos_h = g.edata.pop('cat_feat')
-        with neg_g.local_scope():
-            neg_g.nodes['drug'].data['feature'] = h['drug']
-            neg_g.nodes['protein'].data['feature'] = h['protein']
-            neg_g.apply_edges(concat_message_function, etype=etype)
-            neg_h = neg_g.edata.pop('cat_feat')
+        def concat_feature(g):
+            with g.local_scope():
+                g.nodes['drug'].data['feature'] = h['drug']
+                g.nodes['protein'].data['feature'] = h['protein']
+                g.apply_edges(concat_message_function, etype=etype)
+                return g.edata.pop('cat_feat')
+
+        pos_h, neg_h = concat_feature(g), concat_feature(neg_g)
         if isinstance(pos_h, dict):
             pos_h = pos_h[etype]
         if isinstance(neg_h, dict):
             neg_h = neg_h[etype]
-        return self.pred(pos_h), self.pred(neg_h), h
+
+        # pre, target = shuffle(pos_h, neg_h)
+        #
+        # return self.pred(pre), target, h
+
+        pre, target = predict_target_pair(self.pred(pos_h), self.pred(neg_h))
+
+        return pre, target, h
