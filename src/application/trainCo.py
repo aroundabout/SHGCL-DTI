@@ -9,15 +9,18 @@ from src.model.CoGnnNet import HeCo
 import os
 from src.layers.MLPPredicator import MLPPredicator
 from src.layers.DistMulLayer import DistLayer
-from tools.tools import ConstructGraph, load_data, ConstructGraphWithRW, \
+from src.tools.tools import ConstructGraph, load_data, ConstructGraphWithRW, \
     ConstructGraphOnlyWithRW, construct_negative_graph, compute_loss, \
     construct_postive_graph, evaluate, load_feature, compute_score, \
-    predict_target_pair, concat_link, sparse_mx_to_torch_sparse_tensor
+    predict_target_pair, concat_link, sparse_mx_to_torch_sparse_tensor, l2_norm
 from src.tools.args import parse_argsCO
 from src.tools.EarlyStopping import EarlyStopping
 from scipy.sparse import coo_matrix
 import scipy.sparse as sp
 import torch as th
+import warnings
+
+warnings.filterwarnings("ignore")
 
 drug = 'drug'
 protein = 'protein'
@@ -144,7 +147,7 @@ def evaluateMLP(embeds, out_size, dti_train, dti_val, dti_test, etype, fold, ind
         pre, target = predict_target_pair(model(pos_h), model(neg_h))
         loss, roc_auc_train, aupr_train = compute_score(pre, target, pos_weight=torch.tensor(fold))
         opt.zero_grad()
-        loss.backward(retain_graph=True)
+        loss.backward()
         opt.step()
         model.eval()
         loss_val, roc_auc_val, aupr_val = val_test_eva(model, pos_val, neg_val, pos_weight=torch.tensor(fold))
@@ -152,11 +155,14 @@ def evaluateMLP(embeds, out_size, dti_train, dti_val, dti_test, etype, fold, ind
             print(
                 "Epoch {:05d} | Train Loss {:.4f} | Train ROC_AUC {:.4f} | Train AUPR {:.4f} | Val Loss {:.4f} | Val ROC_AUC {:.4f} | Val AUPR {:.4f}"
                     .format(epoch, loss.item(), roc_auc_train, aupr_train, loss_val.item(), roc_auc_val, aupr_val))
-        early_stopping(loss_val, model)
+        early_stopping(1 - aupr_val, model)
         if early_stopping.early_stop and epoch > 300:
             print("Epoch {:03d} | early stop".format(epoch))
             break
+    model.load_state_dict(torch.load('checkpoint.pt'))
     model.eval()
+    os.remove('checkpoint.pt')
+
     loss_test, roc_auc_test, aupr_test = val_test_eva(model, pos_test, neg_test, pos_weight=torch.tensor(fold))
 
     print("--------------------------------------------------------------")
@@ -178,15 +184,13 @@ def train():
         kf = StratifiedKFold(n_splits=10, random_state=None, shuffle=True)
         roc_test_list = []
         aupr_test_list = []
-        # 十倍交叉实验总是要先分数据集再实验
+        # 十倍交叉实验先分数据集再实验
         pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/drug_pos.npz')).to(device),
                     protein: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/protein_pos.npz')).to(device)}
         for index, (train_index, test_index) in enumerate(kf.split(data_set[:, :2], data_set[:, 2])):
             fold = 10  # 负样本倍数
             drug_protein = torch.zeros(drug_num, protein_num)
             dti_train = data_set[train_index]
-            # for ele in dti_train:
-            #     drug_protein[ele[0], ele[1]] = 1
 
             dti_train, dti_val = train_test_split(dti_train, test_size=0.05, random_state=None)
             dti_test = data_set[test_index]
@@ -200,7 +204,7 @@ def train():
                                           protein_sequence, protein_disease, drug_protein, args, CO=True).to(device)
             model = HeCo(128, args.out_dim, mp_key_dict, hetero_graph, args.attn_drop,
                          len(hetero_graph.etypes), args.tau,
-                         args.lam, [drug, protein])
+                         args.lam, [drug, protein], feat_drop=args.feat_drop)
             mp_graph_dict = {}
             for k, lists in mp_dict.items():
                 mp_graph_dict[k] = [dgl.metapath_reachable_graph(hetero_graph, mp).to(device) for mp in lists]
@@ -227,6 +231,9 @@ def train():
 
             embeds_mp = model.get_mp_embeds(mp_graph_dict, node_features, mp_key_dict, mp_dict)
             embeds_sc = model.get_sc_embeds(hetero_graph, node_features)
+            for k, v in embeds_mp.items():
+                embeds_mp[k] = v.detach()
+                embeds_mp[k] = l2_norm(embeds_mp[k])
             l, roc_auc, aupr = evaluateMLP(embeds_mp, args.out_dim, dti_train, dti_val, dti_test, relation_dti, fold,
                                            index)
             # l, roc_auc, aupr = evaluateDistMult(128, embeds_mp[drug], embeds_mp[protein], dti_train, dti_val, dti_test,

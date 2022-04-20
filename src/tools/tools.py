@@ -8,10 +8,10 @@ from dgl.heterograph import DGLHeteroGraph
 import torch
 from sklearn.metrics import roc_auc_score, f1_score, average_precision_score
 from scipy.sparse import coo_matrix
-from src.tools.args import parse_args
+from src.tools.args import parse_args, parse_argsCO
 import torch as th
 
-args = parse_args()
+args = parse_argsCO()
 
 device = args.device
 
@@ -133,7 +133,7 @@ def load_feature():
 
 
 def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                   protein_disease, drug_protein, args, CO=False) -> DGLHeteroGraph:
+                   protein_disease, drug_protein, args=None, CO=False) -> DGLHeteroGraph:
     num_drug = len(drug_drug)
     num_protein = len(protein_protein)
     num_disease = len(drug_disease.T)
@@ -147,11 +147,13 @@ def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, prot
     drug_chemical = np.array(drug_chemical)
     drug_chemical[drug_chemical < 0.4] = 0
     drug_drug = coo_matrix(drug_drug + drug_chemical)
+    # drug_drug = coo_matrix(drug_drug)
     list_DDI = (drug_drug.row, drug_drug.col)
 
     protein_sequence = np.array(protein_sequence)
     protein_sequence[protein_sequence < 0.6] = 0
     protein_protein = coo_matrix(protein_protein + protein_sequence)
+    # protein_protein = coo_matrix(protein_protein)
     list_PPI = (protein_protein.row, protein_protein.col)
 
     list_SESEI = []
@@ -344,7 +346,6 @@ def predict_target_pair(pos_h, neg_h):
     pre = torch.cat((pos_h, neg_h), 0).reshape(-1, 1).to(device)
     target = torch.cat(
         (torch.ones((len(pos_h), 1), dtype=torch.float), torch.zeros((len(neg_h), 1), dtype=torch.long)), 0).to(device)
-
     return pre, target
 
 
@@ -382,6 +383,17 @@ def shuffle(pos_h, neg_h):
     label = torch.from_numpy(p[:, -1:]).to(device)
     return h, label
 
+def concat_link_pos(graph, feat_src, feat_dst, etype):
+    def concat_message_function(edges):
+        return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
+
+    with graph.local_scope():
+        graph.nodes['drug'].data['feature'] = feat_src
+        graph.nodes['protein'].data['feature'] = feat_dst
+        graph.apply_edges(concat_message_function, etype=etype)
+        pos_h = graph.edata.pop('cat_feat')
+
+    return pos_h
 
 def concat_link(graph, neg_graph, feat_src, feat_dst, etype):
     def concat_message_function(edges):
@@ -434,6 +446,14 @@ def l2_norm(t, axit=1):
     t = t.float()
     norm = th.norm(t, 2, axit, True) + 1e-12
     output = th.div(t, norm)
+    output[th.isnan(output) | th.isinf(output)] = 0.0
+    return output
+
+
+def row_normalize(t):
+    t = t.float()
+    row_sums = t.sum(1) + 1e-12
+    output = t / row_sums[:, None]
     output[th.isnan(output) | th.isinf(output)] = 0.0
     return output
 

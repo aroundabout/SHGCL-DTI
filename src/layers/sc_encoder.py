@@ -78,7 +78,7 @@ class AlphaAttention(nn.Module):
                  weight=True,
                  bias=True,
                  activation=None,
-                 self_loop=False,
+                 self_loop=True,
                  dropout=0.2,
                  num_heads=3):
         super(AlphaAttention, self).__init__()

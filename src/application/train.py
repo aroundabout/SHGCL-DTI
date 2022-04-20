@@ -6,6 +6,7 @@ import numpy as np
 import dgl
 import torch as th
 from src.model.GnnNet import GnnModel
+from src.model.GnnNetV2 import GnnNetV2, GRDTI
 from tools.Sampler import NegativeSampler
 from tools.tools import ConstructGraph, load_data, ConstructGraphWithRW, \
     ConstructGraphOnlyWithRW, construct_negative_graph, compute_loss, \
@@ -15,8 +16,23 @@ from src.tools.EarlyStopping import EarlyStopping
 
 drug = 'drug'
 protein = 'protein'
+sideeffect = 'sideeffect'
+disease = 'disease'
 DR_PR_I = 'drug_protein interaction'
 relation_dti = ('drug', 'drug_protein interaction', 'protein')
+
+
+def evaDist(dti_reconstruct, pos_g, neg_g):
+    pos_src, pos_dst = pos_g.edges()[0].detach(), pos_g.edges()[1].detach()
+    neg_src, neg_dst = neg_g.edges()[0].detach(), neg_g.edges()[1].detach()
+    pos_h = dti_reconstruct[pos_src, pos_dst]
+    neg_h = dti_reconstruct[neg_src, neg_dst]
+    pre, target = predict_target_pair(pos_h, neg_h)
+    pre, target = pre.detach().cpu().numpy(), target.detach().cpu().numpy()
+    roc_auc = roc_auc_score(target, pre)
+    aupr = average_precision_score(target, pre)
+    loss = torch.tensor(1)
+    return loss, roc_auc, aupr
 
 
 def train(arg):
@@ -52,8 +68,10 @@ def train(arg):
             dti_test = data_set[test_index]
             dti_test = dti_test[:, 0], dti_test[:, 1]
             drug_protein = torch.zeros((708, 1512))
+            mask = th.zeros((708, 1512)).to(device)
             for ele in DTItrain:
                 drug_protein[ele[0], ele[1]] = ele[2]
+                mask[ele[0], ele[1]] = 1
             print("--------------------------------------------------------------")
             print("KFold ", index, " of 10")
             print("--------------------------------------------------------------")
@@ -61,74 +79,85 @@ def train(arg):
             node_features = load_feature()
             if arg.random_walk:
                 hetero_graph = ConstructGraphWithRW(drug_drug, drug_chemical, drug_disease, drug_sideeffect,
-                                                    protein_protein,
-                                                    protein_sequence, protein_disease, drug_protein,
+                                                    protein_protein, protein_sequence, protein_disease, drug_protein,
                                                     arg).to(device)
             else:
                 hetero_graph = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
                                               protein_sequence, protein_disease, drug_protein,
                                               arg).to(device)
             negative_graph = construct_negative_graph(hetero_graph, fold, relation_dti).to(device)
-
             test_graph = construct_postive_graph(dti_test, relation_dti).to(device)
             test_neg_graph = construct_negative_graph(test_graph, fold, relation_dti).to(device)
-
             val_graph = construct_postive_graph(dti_val, relation_dti).to(device)
             val_neg_graph = construct_negative_graph(val_graph, fold, relation_dti).to(device)
 
+            _drug_drug, _drug_chemical, _protein_protein, _protein_sequence, _drug_protein, _drug_disease, \
+            _drug_sideeffect, _protein_disease = th.tensor(drug_drug).to(device), th.tensor(drug_chemical).to(
+                device), th.tensor(protein_protein).to(device), th.tensor(protein_sequence).to(device), \
+                                                 th.tensor(drug_protein).to(device), th.tensor(drug_disease).to(
+                device), th.tensor(drug_sideeffect).to(device), th.tensor(protein_disease).to(device),
             model = GnnModel(hetero_graph, 128, arg.out_dim, arg.out_dim, args=arg)
+            edge_dict = {drug: {'drug_drug': _drug_drug, 'drug_ch': _drug_chemical, 'drug_disease': _drug_disease,
+                                'drug_sideeffect': _drug_sideeffect, 'drug_protein': _drug_protein},
+                         protein: {'protein_protein': _protein_protein, 'protein_sequence': _protein_sequence,
+                                   'protein_disease': _protein_disease, 'drug_protein': _drug_protein.T},
+                         sideeffect: {'drug_sideeffect': _drug_sideeffect.T},
+                         disease: {'drug_disease': _drug_disease.T, 'protein_disease': _protein_disease.T}}
+            feat_dict = {drug: {'drug_drug': drug, 'drug_ch': drug, 'drug_disease': disease,
+                                'drug_sideeffect': sideeffect, 'drug_protein': protein},
+                         protein: {'protein_protein': protein, 'protein_sequence': protein,
+                                   'protein_disease': disease, 'drug_protein': drug},
+                         sideeffect: {'drug_sideeffect': drug},
+                         disease: {'drug_disease': drug, 'protein_disease': protein}}
+            # model = GnnNetV2(128, args.out_dim, feat_drop=args.feat_drop, edge_dict=edge_dict)
+            # model = GRDTI(args.out_dim)
             model.to(device)
             opt = torch.optim.Adam(model.parameters(), lr=arg.lr, weight_decay=arg.l2)
             early_stopping = EarlyStopping(patience=arg.patience)
 
-            dgl.dataloading.negative_sampler.Uniform(10)
-            # sampler = dgl.dataloading.MultiLayerFullNeighborSampler(3)
-            # dataloader = dgl.dataloading.EdgeDataLoader(
-            #     hetero_graph, {DR_PR_I: hetero_graph.edges[DR_PR_I]}, sampler,
-            #     negative_sampler=dgl.dataloading.negative_sampler.Uniform(10),
-            #     batch_size=1024,
-            #     shuffle=True,
-            #     drop_last=False)
-            h = {}
-            # drug_drug, drug_chemical, protein_protein, protein_sequence, drug_protein = \
-            #     th.tensor(drug_drug).to(device), th.tensor(drug_chemical).to(device), th.tensor(protein_protein).to(
-            #         device), th.tensor(protein_sequence).to(device), th.tensor(drug_protein).to(device)
+            best_dti_reconstruct = []
+            best_aupr = 1
             for epoch in range(arg.epochs):
                 model.train()
 
-                pre, target, h = model(hetero_graph, negative_graph, node_features, relation_dti)
-                loss, roc_auc_train, aupr_train = compute_score(pre, target, pos_weight=pos_weight)
+                # pre, target, h = model(hetero_graph, negative_graph, node_features, relation_dti)
+                # loss, roc_auc_train, aupr_train = compute_score(pre, target, pos_weight=pos_weight)
 
-                # loss, roc_auc_train, aupr_train = model(hetero_graph, negative_graph, node_features, relation_dti,
-                #                                         hetero_graph.edge_type_subgraph([DR_PR_I]), drug_drug,
-                #                                         drug_chemical, protein_protein, protein_sequence, drug_protein)
+                loss, dti_reconstruct = model(hetero_graph, negative_graph, node_features, relation_dti,
+                                              hetero_graph.edge_type_subgraph([DR_PR_I]), _drug_drug,
+                                              _drug_chemical, _protein_protein, _protein_sequence, _drug_protein, mask)
+                # loss, dti_reconstruct = model(node_features, edge_dict, feat_dict, _drug_drug,
+                #                               _drug_chemical, _protein_protein, _protein_sequence, _drug_protein, mask)
+                # loss, dti_reconstruct = model(_drug_drug, _drug_chemical, _drug_disease, _drug_sideeffect,
+                #                               _protein_protein,
+                #                               _protein_sequence, _protein_disease, _drug_protein, mask, node_features)
+                loss_bce_train, roc_auc_train, aupr_train = \
+                    evaDist(dti_reconstruct, hetero_graph.edge_type_subgraph([DR_PR_I]), negative_graph)
                 model.eval()
 
-                roc_auc_val, aupr_val, f1_val, loss_val = evaluate(model, val_graph, val_neg_graph, h[drug], h[protein],
-                                                                   relation_dti, pos_weight=pos_weight)
-                # loss_val, roc_auc_val, aupr_val = model(hetero_graph, val_neg_graph, node_features,
-                #                                         relation_dti, val_graph, drug_drug,
-                #                                         drug_chemical, protein_protein, protein_sequence, drug_protein)
+                # roc_auc_val, aupr_val, f1_val, loss_val = evaluate(model, val_graph, val_neg_graph, h[drug], h[protein],
+                #                                                    relation_dti, pos_weight=pos_weight)
+                loss_val, roc_auc_val, aupr_val = evaDist(dti_reconstruct, val_graph, val_neg_graph)
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
-                if epoch % 10 == 0:
+                if epoch % 25 == 0:
                     print(
                         "Epoch {:05d} | Train Loss {:.4f} | Train ROC_AUC {:.4f} | Train AUPR {:.4f} | Val Loss {:.4f} | Val ROC_AUC {:.4f} | Val AUPR {:.4f}"
                             .format(epoch, loss.item(), roc_auc_train, aupr_train, loss_val.item(), roc_auc_val,
                                     aupr_val))
-                early_stopping(loss_val, model)
+                early_stopping(1 - aupr_val, model)
+                if 1 - aupr_val < best_aupr:
+                    best_dti_reconstruct = dti_reconstruct
                 if early_stopping.early_stop and epoch > 200:
                     print("Epoch {:02d} | early stop".format(epoch))
                     break
             print("--------------------------------------------------------------")
             model.eval()
 
-            roc_auc_test, aupr_test, f1_test, loss_test = evaluate(model, test_graph, test_neg_graph, h[drug],
-                                                                   h[protein], relation_dti, pos_weight=pos_weight)
-            # loss_test, roc_auc_test, aupr_test = model(hetero_graph, test_neg_graph, node_features,
-            #                                            relation_dti, test_graph, drug_drug,
-            #                                            drug_chemical, protein_protein, protein_sequence, drug_protein)
+            # roc_auc_test, aupr_test, f1_test, loss_test = evaluate(model, test_graph, test_neg_graph, h[drug],
+            # h[protein], relation_dti, pos_weight=pos_weight)
+            loss_test, roc_auc_test, aupr_test = evaDist(best_dti_reconstruct, test_graph, test_neg_graph)
 
             print("Fold {:02d} | Loss {:.4f} |ROC_AUC {:.4f} | AUPR {:.4f}"
                   .format(index, loss_test.item(), roc_auc_test, aupr_test))

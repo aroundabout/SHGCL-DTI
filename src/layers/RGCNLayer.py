@@ -122,14 +122,14 @@ class RGAT(nn.Module):
                                        num_heads=args.multi_head, con="RGAT")
         self.conv2 = RelGraphConvLayer(hid_feats, hid_feats, rel_names, len(rel_names), self_loop=True,
                                        num_heads=args.multi_head, con="RGAT")
-        self.conv3 = RelGraphConvLayer(in_feats, out_feats, rel_names, len(rel_names), self_loop=True,
+        self.conv3 = RelGraphConvLayer(hid_feats, out_feats, rel_names, len(rel_names), self_loop=True,
                                        num_heads=args.multi_head, con="RGAT")
 
     def forward(self, graph, inputs):
         h1 = self.conv1(graph, inputs)
-        # h1 = {k: F.relu(v) for k, v in h1.items()}
-        h2 = self.conv2(graph, h1)
-        # h2 = {k: F.relu(v) for k, v in h2.items()}
-        h3 = self.conv3(graph, h2)
-        h = {k: torch.cat((h1[k], h2[k], h3[k]), 1) for k, v in h1.items()}
-        return h
+        # # h1 = {k: F.relu(v) for k, v in h1.items()}
+        # h2 = self.conv2(graph, h1)
+        # # h2 = {k: F.relu(v) for k, v in h2.items()}
+        # h3 = self.conv3(graph, h2)
+        # h = {k: torch.cat((h1[k], h2[k], h3[k]), 1) for k, v in h1.items()}
+        return h1

@@ -57,7 +57,7 @@ class BetaAttention(nn.Module):
 
 class Attention(nn.Module):
     def __init__(self, in_size, out_size, meta_paths, attn_drop: float,
-                 weight=True, bias=True, activation=None, self_loop=False, dropout=0.2):
+                 weight=True, bias=True, activation=None, self_loop=True, dropout=0.2):
         super(Attention, self).__init__()
         self.in_size = in_size
         self.out_size = out_size
@@ -118,9 +118,11 @@ class Attention(nn.Module):
 
 
 class MpEncoder(nn.Module):
-    def __init__(self, in_size, out_size, mps_dict: dict):
+    def __init__(self, in_size, out_size, mps_dict: dict, attn_drop: float):
         super(MpEncoder, self).__init__()
-        self.conv = nn.ModuleDict({k: Attention(in_size, out_size, v, attn_drop=0.2) for k, v in mps_dict.items()})
+        self.conv = nn.ModuleDict(
+            {k: Attention(in_size, out_size, v, attn_drop=attn_drop) for k, v in mps_dict.items()})
+
 
     def forward(self, g, h, mps_key_dict: dict, mps_dict: dict):
         embeds = {}

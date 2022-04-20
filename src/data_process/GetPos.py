@@ -39,10 +39,14 @@ def getMetaPathSrcAndDst(g, metapath):
     return adj
 
 
-drug_pos_num = 10
+drug_pos_num = 40
 drug_num = 708
-protein_pos_num = 20
+protein_pos_num = 100
 protein_num = 1512
+sideeffect_pos_num = 100
+sideeffect_num = 4192
+disease_pos_num = 100
+disease_num = 5603
 
 drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, \
 protein_sequence, protein_disease, dti_original = load_data()
@@ -89,7 +93,6 @@ protein_all = (prdrpr + prprpr + prdipr).A.astype("float32")
 all_ = (protein_all > 0).sum(-1)
 print(all_.max(), all_.min(), all_.mean())
 protein_pos = np.zeros((protein_num, protein_num))
-
 for i in range(len(protein_all)):
     one = protein_all[i].nonzero()[0]
     if len(one) > protein_pos_num:
@@ -100,3 +103,39 @@ for i in range(len(protein_all)):
         protein_pos[i, one] = 1
 protein_pos = sp.coo_matrix(protein_pos)
 sp.save_npz("../../data/pos/protein_pos.npz", protein_pos)
+
+# sideeffect
+sedrse = getMetaPathSrcAndDst(g, [SE_DR_A, DR_SE_A])
+sedrse = sedrse / sedrse.sum(axis=-1).reshape(-1, 1)
+se_all = (sedrse).A.astype("float32")
+all_ = (se_all > 0).sum(-1)
+sideeffect_pos = np.zeros((sideeffect_num, sideeffect_num))
+for i in range(len(se_all)):
+    one = se_all[i].nonzero()[0]
+    if len(one) > sideeffect_pos_num:
+        oo = np.argsort(-se_all[i, one])
+        sele = one[oo[:sideeffect_pos_num]]
+        sideeffect_pos[i, sele] = 1
+    else:
+        sideeffect_pos[i, one] = 1
+sideeffect_pos = sp.coo_matrix(sideeffect_pos)
+sp.save_npz("../../data/pos/sideeffect_pos.npz", sideeffect_pos)
+
+# disease
+didrdi = getMetaPathSrcAndDst(g, [DI_DR_A, DR_DI_A])
+diprdi = getMetaPathSrcAndDst(g, [DI_PR_A, PR_DI_A])
+didrdi = didrdi / didrdi.sum(axis=-1).reshape(-1, 1)
+diprdi = diprdi / diprdi.sum(axis=-1).reshape(-1, 1)
+disease_all = (didrdi + diprdi).A.astype("float32")
+all_ = (disease_all > 0).sum(-1)
+disease_pos = np.zeros((disease_num, disease_num))
+for i in range(len(disease_all)):
+    one = disease_all[i].nonzero()[0]
+    if len(one) > disease_pos_num:
+        oo = np.argsort(-disease_all[i, one])
+        sele = one[oo[:disease_pos_num]]
+        disease_pos[i, sele] = 1
+    else:
+        disease_pos[i, one] = 1
+disease_pos = sp.coo_matrix(disease_pos)
+sp.save_npz("../../data/pos/disease_pos.npz", disease_pos)
