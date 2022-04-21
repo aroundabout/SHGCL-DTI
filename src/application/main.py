@@ -64,12 +64,14 @@ PRDRPR, PRPRPR, PRDIPR = 'PRDRPR', 'PRPRPR', 'PRDIPR'
 SEDRSE = 'SEDRSE'
 DIDRDI, DIPRDI = 'DIDRDI', "DIPRDI"
 
-
+# HeCo预训练
 def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
                  protein_sequence, protein_disease):
+    # load对比学习过程中的正样本 分为drug和protein
     pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/drug_pos.npz')).to(device),
                 protein: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/protein_pos.npz')).to(device)}
     mp_len_dict = {drug: 4, protein: 3, disease: 2, sideeffect: 1}
+    # load 元路径邻接矩阵 但是邻接节点不是1 而是根据HeCo原文的方法处理了一下 处理方法在normalize_adj上
     drdrdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drdrdr.npz'))).to(device)
     drprdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drprdr.npz'))).to(device)
     drdidr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drdidr.npz'))).to(device)
@@ -81,8 +83,10 @@ def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease,
     diprdi = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/diprdi.npz'))).to(device)
     sedrse = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/sedrse.npz'))).to(device)
 
+    # 输入model的元路径dict
     mps_dict = {drug: [drdrdr, drprdr, drdidr, drsedr], protein: [prdrpr, prprpr, prdipr],
                 disease: [didrdi, diprdi], sideeffect: [sedrse]}
+    # 构建图中的dti从DTItrain中得到
     drug_protein = th.zeros((drug_len, protein_len))
     for ele in DTItrain:
         drug_protein[ele[0], ele[1]] = ele[2]
@@ -107,10 +111,11 @@ def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease,
             break
         loss.backward()
         opt.step()
-
+    # 在Earlystop过程中存的checkpoint.pt
     model.load_state_dict(th.load('checkpoint.pt'))
     os.remove('checkpoint.pt')
     model.eval()
+    # 从mp视角获取最后的特征输出
     embeds = model.get_mp_embeds(node_feature, mps_dict)
     for k, v in embeds.items():
         embeds[k] = v.detach()
@@ -133,10 +138,11 @@ def MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature):
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)
     test_auc = 0
     test_aupr = 0
+    # 使用DTITrain,test,val去构建dgl上的图方便后面的特征拼接 这里DTI既有pos和neg样本
     train_graph = construct_postive_graph((DTItrain[:, 0], DTItrain[:, 1]), relation_dti).to(device)
     val_graph = construct_postive_graph((DTIvalid[:, 0], DTIvalid[:, 1]), relation_dti).to(device)
     test_graph = construct_postive_graph((DTItest[:, 0], DTItest[:, 1]), relation_dti).to(device)
-
+    # drug protein拼接
     train_h = concat_link_pos(train_graph, node_feature[drug], node_feature[protein], relation_dti)
     val_h = concat_link_pos(val_graph, node_feature[drug], node_feature[protein], relation_dti)
     test_h = concat_link_pos(test_graph, node_feature[drug], node_feature[protein], relation_dti)
@@ -153,11 +159,12 @@ def MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature):
         model.eval()
 
         with th.no_grad():
+            # earlystop是根据aupr作为指标 在valaupr最好的时候去计算测试集
             val_loss, valid_auc, valid_aupr = model(DTIvalid, val_h)
             if valid_aupr >= best_valid_aupr:
                 patience = 0
                 best_valid_aupr = valid_aupr
-                train_loss, test_auc, test_aupr = model(DTItest, test_h)
+                test_loss, test_auc, test_aupr = model(DTItest, test_h)
             else:
                 patience += 1
                 if patience > args.patience and i > 300:
@@ -176,6 +183,7 @@ def main():
     # sampling
     whole_positive_index = []
     whole_negative_index = []
+    # 从原始的dti获取正负样本
     for i in range(np.shape(dti_original)[0]):
         for j in range(np.shape(dti_original)[1]):
             if int(dti_original[i][j]) == 1:
@@ -193,7 +201,6 @@ def main():
         data_set[count][1] = i[1]
         data_set[count][2] = 1
         count += 1
-    # 测试是不是样本的问题
     for i in negative_sample_index:
         data_set[count][0] = whole_negative_index[i][0]
         data_set[count][1] = whole_negative_index[i][1]
@@ -209,13 +216,14 @@ def main():
 
         test_auc_fold = []
         test_aupr_fold = []
-
+        # 十倍交叉验证
         kf = StratifiedKFold(n_splits=10, random_state=None, shuffle=True)
         k_fold = 0
 
         for train_index, test_index in kf.split(data_set[:, :2], data_set[:, 2]):
             train = data_set[train_index]
             DTItest = data_set[test_index]
+            # 在划分之后的train上再划分训练和验证集
             DTItrain, DTIvalid = train_test_split(train, test_size=0.1, random_state=None)
 
             k_fold += 1
