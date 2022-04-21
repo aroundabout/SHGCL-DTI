@@ -12,11 +12,11 @@ import scipy.sparse as sp
 from model.CoGnnNet import HeCo
 from src.tools.args import parse_args, parse_argsCO
 from src.tools.tools import load_data, ConstructGraph, load_feature, construct_negative_graph, construct_postive_graph, \
-    sparse_mx_to_torch_sparse_tensor, l2_norm, concat_link_pos
-from CoDTI.src.model.GnnNetV2 import GRDTI, GnnNetV2
+    sparse_mx_to_torch_sparse_tensor, l2_norm, concat_link_pos, normalize_adj
+from CoDTI.src.model.GnnNetV2 import GRDTI, GnnNetV2, GnnNetV3
 from CoDTI.src.model.GnnNet import GnnModel
 from tools.EarlyStopping import EarlyStopping
-from src.layers.MLPPredicator import MLPPredicatorV2
+from src.layers.MLPPredicator import MLPPredicatorDTI
 
 DR_DR_V = 'drug_drug virtual'
 PR_PR_V = 'protein_protein virtual'
@@ -85,27 +85,40 @@ DIDRDI, DIPRDI = 'DIDRDI', "DIPRDI"
 
 def preTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
              protein_sequence, protein_disease):
+    # mp_dict = {drug: [[DR_DR_A, DR_DR_A], [DR_PR_I, PR_DR_I], [DR_SE_A, SE_DR_A], [DR_DI_A, DI_DR_A]],
+    #            protein: [[PR_DR_I, DR_PR_I], [PR_PR_A, PR_PR_A], [PR_DI_A, DI_PR_A]]}
+    # mp_key_dict = {drug: [DRDRDR, DRPRDR, DRSEDR, DRDIDR],
+    #                protein: [PRDRPR, PRPRPR, PRDIPR]}
+    # mp_dict = {drug: [[DR_DR_A, DR_DR_A], [DR_PR_I, PR_DR_I], [DR_SE_A, SE_DR_A], [DR_DI_A, DI_DR_A]],
+    #            protein: [[PR_DR_I, DR_PR_I], [PR_PR_A, PR_PR_A], [PR_DI_A, DI_PR_A]],
+    #            sideeffect: [[SE_DR_A, DR_SE_A]],
+    #            disease: [[DI_DR_A, DR_DI_A], [DI_PR_A, PR_DI_A]]}
+    # mp_key_dict = {drug: [DRDRDR, DRPRDR, DRSEDR, DRDIDR],
+    #                protein: [PRDRPR, PRPRPR, PRDIPR],
+    #                sideeffect: [SEDRSE],
+    #                disease: [DIDRDI, DIPRDI]}
+
     pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/drug_pos.npz')).to(device),
                 protein: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/protein_pos.npz')).to(device)}
-    mp_dict = {drug: [[DR_DR_A, DR_DR_A], [DR_PR_I, PR_DR_I], [DR_SE_A, SE_DR_A], [DR_DI_A, DI_DR_A]],
-               protein: [[PR_DR_I, DR_PR_I], [PR_PR_A, PR_PR_A], [PR_DI_A, DI_PR_A]]}
-    mp_key_dict = {drug: [DRDRDR, DRPRDR, DRSEDR, DRDIDR],
-                   protein: [PRDRPR, PRPRPR, PRDIPR]}
-    #
-    pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/drug_pos.npz')).to(device),
-                protein: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/protein_pos.npz')).to(device),
-                sideeffect: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/sideeffect_pos.npz')).to(
-                    device),
-                disease: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/disease_pos.npz')).to(device)}
-    mp_dict = {drug: [[DR_DR_A, DR_DR_A], [DR_PR_I, PR_DR_I], [DR_SE_A, SE_DR_A], [DR_DI_A, DI_DR_A]],
-               protein: [[PR_DR_I, DR_PR_I], [PR_PR_A, PR_PR_A], [PR_DI_A, DI_PR_A]],
-               sideeffect: [[SE_DR_A, DR_SE_A]],
-               disease: [[DI_DR_A, DR_DI_A], [DI_PR_A, PR_DI_A]]}
-    mp_key_dict = {drug: [DRDRDR, DRPRDR, DRSEDR, DRDIDR],
-                   protein: [PRDRPR, PRPRPR, PRDIPR],
-                   sideeffect: [SEDRSE],
-                   disease: [DIDRDI, DIPRDI]}
+    # pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/drug_pos.npz')).to(device),
+    #             protein: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/protein_pos.npz')).to(device),
+    #             sideeffect: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/sideeffect_pos.npz')).to(
+    #                 device),
+    #             disease: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/disease_pos.npz')).to(device)}
+    mp_len_dict = {drug: 4, protein: 3, disease: 2, sideeffect: 1}
+    drdrdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drdrdr.npz'))).to(device)
+    drprdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drprdr.npz'))).to(device)
+    drdidr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drdidr.npz'))).to(device)
+    drsedr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drsedr.npz'))).to(device)
+    prdrpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prdrpr.npz'))).to(device)
+    prprpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prprpr.npz'))).to(device)
+    prdipr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prdipr.npz'))).to(device)
+    didrdi = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/didrdi.npz'))).to(device)
+    diprdi = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/diprdi.npz'))).to(device)
+    sedrse = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/sedrse.npz'))).to(device)
 
+    mps_dict = {drug: [drdrdr, drprdr, drdidr, drsedr],protein: [prdrpr, prprpr, prdipr],
+                disease: [didrdi, diprdi],sideeffect: [sedrse]}
     drug_protein = th.zeros((drug_len, protein_len))
     mask = th.zeros((drug_len, protein_len)).to(device)
     for ele in DTItrain:
@@ -115,17 +128,15 @@ def preTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease, dru
     hetero_graph = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
                                   protein_sequence, protein_disease, drug_protein, args, CO=True).to(device)
 
-    model = HeCo(args.in_dim, args.hid_dim, mp_key_dict, hetero_graph, args.attn_drop, len(hetero_graph.etypes),
+    model = HeCo(args.in_dim, args.hid_dim, mp_len_dict, hetero_graph, args.attn_drop, len(hetero_graph.etypes),
                  args.tau, args.lam, [drug, protein, sideeffect, disease], feat_drop=args.feat_drop).to(device)
-    mp_graph_dict = {}
-    for k, lists in mp_dict.items():
-        mp_graph_dict[k] = [dgl.metapath_reachable_graph(hetero_graph, mp).to(device) for mp in lists]
+
     opt = th.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.l2)
     early_stopping = EarlyStopping(patience=args.patience)
     for epoch in range(args.epochs):
         model.train()
         opt.zero_grad()
-        loss = model(hetero_graph, mp_graph_dict, node_feature, pos_dict, mp_key_dict, mp_dict)
+        loss = model(hetero_graph, mps_dict, node_feature, pos_dict)
         if epoch % 25 == 0:
             print("Epoch {:03d} | Train Loss {:.4f}".format(epoch, loss.item()))
         early_stopping(loss, model)
@@ -138,7 +149,7 @@ def preTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease, dru
     model.load_state_dict(th.load('checkpoint.pt'))
     os.remove('checkpoint.pt')
     model.eval()
-    embeds = model.get_mp_embeds(mp_graph_dict, node_feature, mp_key_dict, mp_dict)
+    embeds = model.get_mp_embeds(node_feature, mps_dict)
     # embeds = model.get_sc_embeds(hetero_graph, node_feature)
     for k, v in embeds.items():
         embeds[k] = v.detach()
@@ -259,15 +270,43 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
 def TrainAndEvaluateV2(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical, drug_disease,
                        drug_sideeffect, protein_protein, protein_sequence, protein_disease, node_feature):
     device = th.device(args.device)
+    drug_protein = th.zeros((708, 1512))
+    mask = th.zeros((708, 1512)).to('cuda:3')
+    for ele in DTItrain:
+        drug_protein[ele[0], ele[1]] = ele[2]
+        mask[ele[0], ele[1]] = 1
+
+    drug_drug = th.tensor(drug_drug).to(device)
+    drug_chemical = th.tensor(drug_chemical).to(device)
+    drug_disease = th.tensor(drug_disease).to(device)
+    drug_sideeffect = th.tensor(drug_sideeffect).to(device)
+    protein_protein = th.tensor(protein_protein).to(device)
+    protein_sequence = th.tensor(protein_sequence).to(device)
+    protein_disease = th.tensor(protein_disease).to(device)
+    drug_protein = drug_protein.to(device)
+    feat_dict = {drug: {'drug_drug': drug, 'drug_ch': drug, 'drug_disease': disease,
+                        'drug_sideeffect': sideeffect, 'drug_protein': protein},
+                 protein: {'protein_protein': protein, 'protein_sequence': protein,
+                           'protein_disease': disease, 'drug_protein': drug},
+                 sideeffect: {'drug_sideeffect': drug},
+                 disease: {'drug_disease': drug, 'protein_disease': protein}}
+    edge_dict = {drug: {'drug_drug': drug_drug, 'drug_ch': drug_chemical, 'drug_disease': drug_disease,
+                        'drug_sideeffect': drug_sideeffect, 'drug_protein': drug_protein},
+                 protein: {'protein_protein': protein_protein, 'protein_sequence': protein_sequence,
+                           'protein_disease': protein_disease, 'drug_protein': drug_protein.T},
+                 sideeffect: {'drug_sideeffect': drug_sideeffect.T},
+                 disease: {'drug_disease': drug_disease.T, 'protein_disease': protein_disease.T}}
 
     best_valid_aupr = 0.
     patience = 0.
 
-    model = MLPPredicatorV2(args.hid_dim * 2, 1)
+    model = MLPPredicatorDTI(args.hid_dim * 2, 1)
+    # model = GnnNetV3(args.out_dim, args.feat_drop, edge_dict)
+
     model.to(device)
 
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)
-    test_roc_auc = 0
+    test_auc = 0
     test_aupr = 0
     train_graph = construct_postive_graph((DTItrain[:, 0], DTItrain[:, 1]), relation_dti).to(device)
     val_graph = construct_postive_graph((DTIvalid[:, 0], DTIvalid[:, 1]), relation_dti).to(device)
@@ -281,6 +320,7 @@ def TrainAndEvaluateV2(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemic
 
         model.train()
         loss, train_auc, train_aupr = model(DTItrain, train_h)
+        # loss, train_auc, train_aupr = model(node_feature, edge_dict, feat_dict, DTItrain, train_graph)
         optimizer.zero_grad()
         loss.backward()
         th.nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -290,10 +330,12 @@ def TrainAndEvaluateV2(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemic
 
         with th.no_grad():
             val_loss, valid_auc, valid_aupr = model(DTIvalid, val_h)
+            # val_loss, valid_auc, valid_aupr = model(node_feature, edge_dict, feat_dict, DTIvalid, val_graph)
             if valid_aupr >= best_valid_aupr:
                 patience = 0
                 best_valid_aupr = valid_aupr
                 train_loss, test_auc, test_aupr = model(DTItest, test_h)
+                # train_loss, test_auc, test_aupr = model(node_feature, edge_dict, feat_dict, DTItest, test_graph)
             else:
                 patience += 1
                 if patience > args.patience and i > 300:

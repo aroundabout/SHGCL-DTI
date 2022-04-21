@@ -3,17 +3,18 @@ import torch
 import torch.nn.functional as F
 import torch as th
 import torch.nn as nn
-from src.tools.tools import l2_norm, row_normalize
+from src.tools.tools import l2_norm, row_normalize, concat_link_pos
 
 from src.tools.tools import construct_postive_graph, construct_negative_graph, predict_target_pair, compute_score, \
     l2_norm
-from src.layers.MLPPredicator import MLPPredicator
+from src.layers.MLPPredicator import MLPPredicator, MLPPredicatorDTI
 from src.layers.DistMulLayer import DistLayer
 
 drug = 'drug'
 protein = 'protein'
 sideeffect = 'sideeffect'
 disease = 'disease'
+relation_dti = ('drug', 'drug_protein interaction', 'protein')
 
 
 class DTIGCN(nn.Module):
@@ -80,7 +81,7 @@ class GnnNetV2(nn.Module):
             self.feat_drop = lambda x: x
 
         self.fc_list = nn.ModuleDict({k: nn.Linear(v, out_size) for k, v in feat_size_dict.items()})
-        # self.conv1 = DTIGCN(edge_dict, out_size)
+        self.conv1 = DTIGCN(edge_dict, out_size)
         # self.conv2 = DTIGCN(edge_dict, out_size)
         self.decoder = DistLayer(out_size)
 
@@ -90,12 +91,37 @@ class GnnNetV2(nn.Module):
         for k, v in h.items():
             # h_all[k] = self.feat_drop(self.fc_list[k](h[k]))
             h_all[k] = self.fc_list[k](h[k])
-        # h_all = self.conv1(h_all, edge_dict, feat_dict)
+        h_all = self.conv1(h_all, edge_dict, feat_dict)
         # h_all = self.conv2(h_all, edge_dict, feat_dict)
         tloss, dti_reconstruct = self.decoder(drug_drug, drug_chemical, protein_protein, protein_sequence,
                                               drug_protein, drug_disease, drug_sideeffect, protein_disease, mask,
                                               h_all)
         return tloss, dti_reconstruct
+
+
+class GnnNetV3(nn.Module):
+    def __init__(self, out_size, feat_drop, edge_dict, feat_size_dict=None):
+        super(GnnNetV3, self).__init__()
+        if feat_size_dict is None:
+            feat_size_dict = {'drug': 128, 'protein': 128, 'sideeffect': 128, 'disease': 128}
+        if feat_drop > 0:
+            self.feat_drop = nn.Dropout(feat_drop)
+        else:
+            self.feat_drop = lambda x: x
+
+        self.fc_list = nn.ModuleDict({k: nn.Linear(v, out_size) for k, v in feat_size_dict.items()})
+        self.conv1 = DTIGCN(edge_dict, out_size)
+        self.decoder = MLPPredicatorDTI(out_size * 2, 1)
+
+    def forward(self, h, edge_dict: dict, feat_dict: dict, dti, g):
+        h_all = {}
+        for k, v in h.items():
+            # h_all[k] = self.feat_drop(self.fc_list[k](h[k]))
+            h_all[k] = self.fc_list[k](h[k])
+        h_all = self.conv1(h_all, edge_dict, feat_dict)
+        f = concat_link_pos(g, h_all[drug], h_all[protein], relation_dti)
+        loss, auc, aupr = self.decoder(dti, f)
+        return loss, auc, aupr
 
 
 class GRDTI(nn.Module):

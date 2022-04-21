@@ -1,8 +1,11 @@
 import torch.nn as nn
 import torch as th
 
+from tools.args import parse_argsCO
 from tools.tools import compute_score
 
+args = parse_argsCO()
+device = args.device
 
 class MLPPredicator(nn.Module):
     def __init__(self, n_i, n_o):
@@ -22,9 +25,9 @@ class MLPPredicator(nn.Module):
         return out
 
 
-class MLPPredicatorV2(nn.Module):
+class MLPPredicatorDTI(nn.Module):
     def __init__(self, n_i, n_o):
-        super(MLPPredicatorV2, self).__init__()
+        super(MLPPredicatorDTI, self).__init__()
         self.linear = nn.Sequential(
             nn.Linear(n_i, int(n_i / 2)),
             nn.Dropout(0.5),

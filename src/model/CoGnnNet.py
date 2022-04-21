@@ -21,29 +21,32 @@ class HeCo(nn.Module):
         else:
             self.feat_drop = lambda x: x
 
-        self.mp = MpEncoder(out_size, out_size, mps_dict, attn_drop)
+        self.mp = nn.ModuleDict({k: MpEncoder(v, out_size, attn_drop) for k, v in mps_dict.items()})
         self.sc = ScEncoder(out_size, out_size, g.etypes, g.ntypes, attn_drop, num_bases)
         self.contrast = Contrast(out_size, tau, lam, keys)
 
-    def get_mp_embeds(self, mp_graph_dict, h, mps_key, mps):
+    def get_mp_embeds(self, h, mps_dict):
         h_all = {}
-        for k, v in h.items():
-            # h_all[k] = F.elu(self.fc_list[k](h[k]))
-            h_all[k] = self.fc_list[k](h[k])
-        return self.mp(mp_graph_dict, h_all, mps_key, mps)
+        for k, v in mps_dict.items():
+            h_all[k] = F.elu(self.fc_list[k](h[k]))
+            h_all[k] = self.mp[k](h[k], mps_dict[k])
+        return h_all
+
 
     def get_sc_embeds(self, graph, h):
         h_all = {}
         for k, v in h.items():
-            # h_all[k] = F.elu(self.fc_list[k](h[k]))
-            h_all[k] = self.fc_list[k](h[k])
+            h_all[k] = F.elu(self.fc_list[k](h[k]))
+            # h_all[k] = self.fc_list[k](h[k])
         return self.sc(graph, h_all)
 
-    def forward(self, graph, meta_graph_dict, h, pos_dict, mps_key_dict, mps_dict):
+    def forward(self, graph, mps_dict, h, pos_dict):
         h_all = {}
         for k, v in h.items():
             h_all[k] = F.elu(self.feat_drop(self.fc_list[k](h[k])))
-        z_mp = self.mp(meta_graph_dict, h_all, mps_key_dict, mps_dict)
+        z_mp = {}
+        for k, v in mps_dict.items():
+            z_mp[k] = self.mp[k](h_all[k], mps_dict[k])
         z_sc = self.sc(graph, h_all)
         loss = self.contrast(z_mp, z_sc, pos_dict)
         return loss

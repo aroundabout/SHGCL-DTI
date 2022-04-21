@@ -3,6 +3,7 @@ from random import random
 import numpy
 import numpy as np
 import dgl
+import scipy.sparse as sp
 from dgl import convert
 from dgl.heterograph import DGLHeteroGraph
 import torch
@@ -69,9 +70,9 @@ def saveTxt(features: list[str], path: str):
 
 def load_data():
     network_path = '../../data/data/'
+    true_drug = drug_len
 
     drug_drug = np.loadtxt(network_path + 'mat_drug_drug.txt')
-    true_drug = drug_len
     drug_chemical = np.loadtxt(network_path + 'Similarity_Matrix_Drugs.txt')
     drug_chemical = drug_chemical[:true_drug, :true_drug]
     drug_disease = np.loadtxt(network_path + 'mat_drug_disease.txt')
@@ -457,6 +458,17 @@ def row_normalize(t):
     output[th.isnan(output) | th.isinf(output)] = 0.0
     return output
 
+
+def normalize_adj(adj):
+    """Symmetrically normalize adjacency matrix."""
+    adj = sp.coo_matrix(adj)
+    rowsum = np.array(adj.sum(1))
+    d_self_loop=sp.diags((1/(1+rowsum)).flatten())
+    d_inv_sqrt = np.power(rowsum, -0.5).flatten()
+    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+    new_adj= adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt)+d_self_loop
+    return new_adj.tocoo()
 
 if __name__ == "__main__":
     drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, protein_disease, dti_original = load_data()
