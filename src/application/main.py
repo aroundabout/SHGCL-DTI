@@ -124,10 +124,6 @@ def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease,
 
 
 def MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature):
-    drug_protein = th.zeros((708, 1512))
-    for ele in DTItrain:
-        drug_protein[ele[0], ele[1]] = ele[2]
-
     best_valid_aupr = 0.
     patience = 0.
 
@@ -224,7 +220,7 @@ def main():
             train = data_set[train_index]
             DTItest = data_set[test_index]
             # 在划分之后的train上再划分训练和验证集
-            DTItrain, DTIvalid = train_test_split(train, test_size=0.1, random_state=None)
+            DTItrain, DTIvalid = train_test_split(train, test_size=0.05, random_state=None)
 
             k_fold += 1
             print("--------------------------------------------------------------")
