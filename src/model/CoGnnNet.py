@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch.nn.functional as F
-import dgl
 from src.layers.mp_encoder import MpEncoder
 from src.layers.sc_encoder import ScEncoder
 from src.layers.contrast import Contrast
@@ -29,7 +28,7 @@ class HeCo(nn.Module):
         h_all = {}
         for k, v in mps_dict.items():
             h_all[k] = F.elu(self.fc_list[k](h[k]))
-            h_all[k] = self.mp[k](h[k], mps_dict[k])
+            h_all[k] = self.mp[k](h_all[k], mps_dict[k])
         return h_all
 
 

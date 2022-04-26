@@ -7,9 +7,9 @@ import scipy.sparse as sp
 from dgl import convert
 from dgl.heterograph import DGLHeteroGraph
 import torch
-from sklearn.metrics import roc_auc_score, f1_score, average_precision_score
+from sklearn.metrics import roc_auc_score, f1_score, average_precision_score, precision_recall_curve, auc
 from scipy.sparse import coo_matrix
-from src.tools.args import parse_args, parse_argsCO
+from src.tools.args import parse_argsCO
 import torch as th
 
 args = parse_argsCO()
@@ -54,6 +54,8 @@ drug_len = 708
 protein_len = 1512
 sideeffect_len = 4192
 disease_len = 5603
+
+
 
 
 def get_meta_path():
@@ -364,8 +366,10 @@ def binary_acc(preds, y):
 
 def compute_score(pre, target, pos_weight=None):
     loss = compute_loss(pre, target, pos_weight=pos_weight)
-    roc_auc = roc_auc_score(target.cpu().detach().numpy(), pre.cpu().detach().numpy())
-    aupr = average_precision_score(target.cpu().detach().numpy(), pre.cpu().detach().numpy())
+    roc_auc = roc_auc_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
+    precision, recall, threshold = precision_recall_curve(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
+    aupr = auc(recall, precision)
+        # aupr = average_precision_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
     return loss, roc_auc, aupr
 
 
