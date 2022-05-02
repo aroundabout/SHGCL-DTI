@@ -1,18 +1,18 @@
-from random import random
-
 import numpy
 import numpy as np
 import dgl
 import scipy.sparse as sp
-from dgl import convert
 from dgl.heterograph import DGLHeteroGraph
 import torch
 from sklearn.metrics import roc_auc_score, f1_score, average_precision_score, precision_recall_curve, auc
 from scipy.sparse import coo_matrix
-from src.tools.args import parse_argsCO
 import torch as th
+import sys
 
-args = parse_argsCO()
+sys.path.append('../')
+from tools.args import parse_args
+
+args = parse_args()
 
 device = args.device
 
@@ -54,8 +54,6 @@ drug_len = 708
 protein_len = 1512
 sideeffect_len = 4192
 disease_len = 5603
-
-
 
 
 def get_meta_path():
@@ -149,14 +147,14 @@ def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, prot
 
     drug_chemical = np.array(drug_chemical)
     drug_chemical[drug_chemical < 0.4] = 0
-    drug_drug = coo_matrix(drug_drug + drug_chemical)
-    # drug_drug = coo_matrix(drug_drug)
+    # drug_drug = coo_matrix(drug_drug + drug_chemical)
+    drug_drug = coo_matrix(drug_drug)
     list_DDI = (drug_drug.row, drug_drug.col)
 
     protein_sequence = np.array(protein_sequence)
     protein_sequence[protein_sequence < 0.6] = 0
-    protein_protein = coo_matrix(protein_protein + protein_sequence)
-    # protein_protein = coo_matrix(protein_protein)
+    # protein_protein = coo_matrix(protein_protein + protein_sequence)
+    protein_protein = coo_matrix(protein_protein)
     list_PPI = (protein_protein.row, protein_protein.col)
 
     list_SESEI = []
@@ -369,7 +367,7 @@ def compute_score(pre, target, pos_weight=None):
     roc_auc = roc_auc_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
     precision, recall, threshold = precision_recall_curve(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
     aupr = auc(recall, precision)
-        # aupr = average_precision_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
+    # aupr = average_precision_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
     return loss, roc_auc, aupr
 
 
@@ -389,6 +387,10 @@ def shuffle(pos_h, neg_h):
     return h, label
 
 
+def concat_link(dti, feat_src, feat_dst):
+    return torch.cat([feat_src[dti[:,0]], feat_dst[dti[:,1]]], 1)
+
+
 def concat_link_pos(graph, feat_src, feat_dst, etype):
     def concat_message_function(edges):
         return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
@@ -402,22 +404,22 @@ def concat_link_pos(graph, feat_src, feat_dst, etype):
     return pos_h
 
 
-def concat_link(graph, neg_graph, feat_src, feat_dst, etype):
-    def concat_message_function(edges):
-        return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
-
-    with graph.local_scope():
-        graph.nodes['drug'].data['feature'] = feat_src
-        graph.nodes['protein'].data['feature'] = feat_dst
-        graph.apply_edges(concat_message_function, etype=etype)
-        pos_h = graph.edata.pop('cat_feat')
-    with neg_graph.local_scope():
-        neg_graph.nodes['drug'].data['feature'] = feat_src
-        neg_graph.nodes['protein'].data['feature'] = feat_dst
-        neg_graph.apply_edges(concat_message_function, etype=etype)
-        neg_h = neg_graph.edata.pop('cat_feat')
-
-    return pos_h, neg_h
+# def concat_link(graph, neg_graph, feat_src, feat_dst, etype):
+#     def concat_message_function(edges):
+#         return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
+#
+#     with graph.local_scope():
+#         graph.nodes['drug'].data['feature'] = feat_src
+#         graph.nodes['protein'].data['feature'] = feat_dst
+#         graph.apply_edges(concat_message_function, etype=etype)
+#         pos_h = graph.edata.pop('cat_feat')
+#     with neg_graph.local_scope():
+#         neg_graph.nodes['drug'].data['feature'] = feat_src
+#         neg_graph.nodes['protein'].data['feature'] = feat_dst
+#         neg_graph.apply_edges(concat_message_function, etype=etype)
+#         neg_h = neg_graph.edata.pop('cat_feat')
+#
+#     return pos_h, neg_h
 
 
 def evaluate(model, test_graph, test_neg_graph, drug_feature, protein_feature, etype, pos_weight=None):
@@ -475,18 +477,3 @@ def normalize_adj(adj):
     d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
     new_adj = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt) + d_self_loop
     return new_adj.tocoo()
-
-
-if __name__ == "__main__":
-    drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, protein_disease, dti_original = load_data()
-
-    # 构建异质图
-
-    hetero_graph = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
-                                  protein_sequence,
-                                  protein_disease, dti_original, args)
-
-    g = dgl.metapath_reachable_graph(hetero_graph, [PR_DI_A, DI_PR_A])
-    g1 = dgl.metapath_reachable_graph(hetero_graph, [DR_DI_A, DI_DR_A])
-
-    A = 1

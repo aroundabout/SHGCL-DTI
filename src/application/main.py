@@ -1,21 +1,24 @@
 # -*- coding: utf-8 -*-
 import os
 import random
+import time
 
 import torch
 import torch as th
+from torch.utils.data import DataLoader
 import numpy as np
-
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import scipy.sparse as sp
+import sys
 
-from src.model.CoGnnNet import HeCo
-from src.layers.MLPPredicator import MLPPredicator
-from src.tools.args import parse_argsCO
-from src.tools.tools import load_data, ConstructGraph, load_feature, construct_postive_graph, \
-    sparse_mx_to_torch_sparse_tensor, l2_norm, concat_link_pos, normalize_adj, compute_score
-from src.tools.EarlyStopping import EarlyStopping
-
+sys.path.append('../')
+from model.CoGnnNet import HeCo
+from layers.MLPPredicator import MLPPredicator
+from tools.args import parse_args
+from tools.tools import load_data, ConstructGraph, load_feature, construct_postive_graph, \
+    sparse_mx_to_torch_sparse_tensor, l2_norm, concat_link, normalize_adj, compute_score, compute_loss
+from tools.EarlyStopping import EarlyStopping
+from tools.DTIDataSet import DTIDataSet
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -61,7 +64,7 @@ protein_len = 1512
 sideeffect_len = 4192
 disease_len = 5603
 
-args = parse_argsCO()
+args = parse_args()
 print(args)
 device = args.device
 
@@ -71,9 +74,48 @@ SEDRSE = 'SEDRSE'
 DIDRDI, DIPRDI = 'DIDRDI', "DIPRDI"
 
 
+# mlp的训练和测试函数
+def train(dataloader, model, optimizer, feat_drug, feat_protein):
+    model.train()
+    loss_fn = 0.
+    pre_all = []
+    target_all = []
+    for i, data in enumerate(dataloader):
+        h, label = data
+        val_h = concat_link(h, feat_drug, feat_protein)
+        pre = model(val_h)
+        target = label
+        pre_all.append(pre)
+        target_all.append(target)
+        loss = compute_loss(pre, target)
+        loss_fn += loss.item()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    loss_all, auc, aupr = compute_score(torch.cat(pre_all, 0), torch.cat(target_all, 0))
+    return loss_fn / len(dataloader), auc, aupr
+
+
+def val_or_test(dataloader, model):
+    model.eval()
+    pre_all = []
+    target_all = []
+    with th.no_grad():
+        for i, data in enumerate(dataloader):
+            h, label = data
+            pre = model(h)
+            target = label
+            pre_all.append(pre)
+            target_all.append(target)
+        pre_all = torch.cat(pre_all, 0)
+        target_all = torch.cat(target_all, 0)
+        loss, auc, aupr = compute_score(pre_all, target_all)
+    return auc, aupr
+
+
 # HeCo预训练
 def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
-                 protein_sequence, protein_disease, fold, retrain):
+                 protein_sequence, protein_disease, fold, retrain, dir_name):
     # load对比学习过程中的正样本 分为drug和protein
     pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/drug_pos.npz')).to(device),
                 protein: sparse_mx_to_torch_sparse_tensor(sp.load_npz('../../data/pos/protein_pos.npz')).to(device)}
@@ -103,11 +145,10 @@ def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease,
                  args.tau, args.lam, [drug, protein, sideeffect, disease], feat_drop=args.feat_drop).to(device)
     opt = th.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.l2)
     early_stopping = EarlyStopping(patience=args.patience)
-    model_dir = '../bestmodel/' + 'heco' + '_fold' + str(fold) + '_rs' + str(args.random_state) + '.pt'
+    model_dir = '../bestmodel/heco' + dir_name
     if retrain or not os.path.exists(model_dir):
         for epoch in range(args.epochs):
             model.train()
-            opt.zero_grad()
             loss = model(hetero_graph, mps_dict, node_feature, pos_dict)
             if epoch % 25 == 0:
                 print("Epoch {:03d} | Train Loss {:.4f}".format(epoch, loss.item()))
@@ -115,9 +156,9 @@ def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease,
             if early_stopping.early_stop:
                 print("Epoch {:03d} | early stop".format(epoch))
                 break
+            opt.zero_grad()
             loss.backward()
             opt.step()
-        # 在Earlystop过程中存的checkpoint.pt
     model.load_state_dict(th.load(model_dir))
     model.eval()
     # 从mp视角获取最后的特征输出
@@ -129,57 +170,49 @@ def HeCoPreTrain(DTItrain, node_feature, drug_drug, drug_chemical, drug_disease,
     return embeds
 
 
-def MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature, fold, retrain):
-    best_valid_aupr = 0.
-    patience = 0.
-    test_auc = 0
-    test_aupr = 0
-
-    # 使用DTITrain,test,val去构建dgl上的图方便后面的特征拼接 这里DTI既有pos和neg样本
-    # drug protein拼接
-    train_graph = construct_postive_graph((DTItrain[:, 0], DTItrain[:, 1]), relation_dti).to(device)
-    val_graph = construct_postive_graph((DTIvalid[:, 0], DTIvalid[:, 1]), relation_dti).to(device)
-    test_graph = construct_postive_graph((DTItest[:, 0], DTItest[:, 1]), relation_dti).to(device)
-    train_h = concat_link_pos(train_graph, node_feature[drug], node_feature[protein], relation_dti)
-    val_h = concat_link_pos(val_graph, node_feature[drug], node_feature[protein], relation_dti)
-    test_h = concat_link_pos(test_graph, node_feature[drug], node_feature[protein], relation_dti)
+def MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature, fold, retrain, dir_name):
+    best_valid_aupr, patience, test_auc, test_aupr = 0., 0., 0., 0.
+    # train_graph = construct_postive_graph((DTItrain[:, 0], DTItrain[:, 1]), relation_dti).to(device)
+    # val_graph = construct_postive_graph((DTIvalid[:, 0], DTIvalid[:, 1]), relation_dti).to(device)
+    # test_graph = construct_postive_graph((DTItest[:, 0], DTItest[:, 1]), relation_dti).to(device)
+    # train_h = concat_link_pos(train_graph, node_feature[drug], node_feature[protein], relation_dti)
+    # val_h = concat_link_pos(val_graph, node_feature[drug], node_feature[protein], relation_dti)
+    # test_h = concat_link_pos(test_graph, node_feature[drug], node_feature[protein], relation_dti)
+    # train_h = concat_link(DTItrain, node_feature[drug], node_feature[protein])
+    train_h = DTItrain
+    val_h = concat_link(DTIvalid, node_feature[drug], node_feature[protein])
+    test_h = concat_link(DTItest, node_feature[drug], node_feature[protein])
+    train_label = th.tensor(DTItrain[:, 2], dtype=th.float).reshape(-1, 1).to(device)
+    val_label = th.tensor(DTIvalid[:, 2], dtype=th.float).reshape(-1, 1).to(device)
+    test_label = th.tensor(DTItest[:, 2], dtype=th.float).reshape(-1, 1).to(device)
+    train_set, val_set, test_set = \
+        DTIDataSet(train_h, train_label), DTIDataSet(val_h, val_label), DTIDataSet(test_h, test_label)
+    train_loader = DataLoader(dataset=train_set, batch_size=2048, shuffle=True, num_workers=0)
+    val_loader = DataLoader(dataset=val_set, batch_size=2048, shuffle=True, num_workers=0)
+    test_loader = DataLoader(dataset=test_set, batch_size=2048, shuffle=True, num_workers=0)
 
     model = MLPPredicator(args.hid_dim * 2, 1).to(device)
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)
-    model_dir = '../bestmodel/mlp' + '_fold' + str(fold) + '_rs' + str(args.random_state) + '.pt'
+    model_dir = '../bestmodel/mlp' + dir_name
     if retrain or not os.path.exists(model_dir):
-        for i in range(args.epochs):
-            model.train()
-            pre = model(train_h)
-            target = th.tensor(DTItrain[:, 2], dtype=th.float).reshape(-1, 1).to(device)
-            loss, train_auc, train_aupr = compute_score(pre, target)
-            optimizer.zero_grad()
-            loss.backward()
-            th.nn.utils.clip_grad_norm_(model.parameters(), 1)
-            optimizer.step()
-            model.eval()
-
-            with th.no_grad():
-                # earlystop是根据aupr作为指标 在valaupr最好的时候去计算测试集
-                pre_val = model(val_h)
-                target_val = th.tensor(DTIvalid[:, 2], dtype=th.float).reshape(-1, 1).to(device)
-                val_loss, valid_auc, valid_aupr = compute_score(pre_val, target_val)
-                if valid_aupr >= best_valid_aupr:
-                    patience = 0
-                    best_valid_aupr = valid_aupr
-                    pre_test = model(test_h)
-                    target_test = th.tensor(DTItest[:, 2], dtype=th.float).reshape(-1, 1).to(device)
-                    test_loss, test_auc, test_aupr = compute_score(pre_test, target_test)
-                    torch.save(model.state_dict(), model_dir)
-                else:
-                    patience += 1
-                    if patience > args.patience and i > 500:
-                        print("Early Stopping")
-                        break
-            if i % 25 == 0:
+        for epoch in range(args.epochs):
+            loss, train_auc, train_aupr = train(dataloader=train_loader, model=model, optimizer=optimizer,
+                                                feat_drug=node_feature[drug], feat_protein=node_feature[protein])
+            valid_auc, valid_aupr = val_or_test(dataloader=val_loader, model=model)
+            if valid_aupr >= best_valid_aupr:
+                patience = 0
+                best_valid_aupr = valid_aupr
+                test_auc, test_aupr = val_or_test(dataloader=test_loader, model=model)
+                torch.save(model.state_dict(), model_dir)
+            else:
+                patience += 1
+                if patience > args.patience and epoch > 200:
+                    print("Early Stopping")
+                    break
+            if epoch % 25 == 0:
                 print(
                     "Epoch {:05d} | Train Loss {:02f} | Train auc {:.4f} | Train aupr {:.4f} | Val ROC_AUC {:.4f} | Val AUPR {:.4f} | Test ROC_AUC {:.4f} | Test AUPR {:.4f}"
-                        .format(i, loss.item(), train_auc, train_aupr, valid_auc, valid_aupr, test_auc,
+                        .format(epoch, loss, train_auc, train_aupr, valid_auc, valid_aupr, test_auc,
                                 test_aupr))
     model.load_state_dict(th.load(model_dir))
     model.eval()
@@ -193,81 +226,86 @@ def MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature, fold, retrain):
     return test_auc, test_aupr
 
 
-def main(retrain=True):
+def main(random_seed, task, retrain=True):
     drug_d, drug_ch, drug_di, drug_side, protein_p, protein_seq, protein_di, dti_original = load_data()
-    # sampling
     whole_positive_index = []
     whole_negative_index = []
-    # 从原始的dti获取正负样本
     for i in range(np.shape(dti_original)[0]):
         for j in range(np.shape(dti_original)[1]):
             if int(dti_original[i][j]) == 1:
                 whole_positive_index.append([i, j])
             elif int(dti_original[i][j]) == 0:
                 whole_negative_index.append([i, j])
+
     # pos:neg=1:10
+    # negative_sample_index = np.random.choice(np.arange(len(whole_negative_index)),
+    #                                          size=10 * len(whole_positive_index), replace=False)
+    # data_set = np.zeros((len(negative_sample_index) + len(whole_positive_index), 3), dtype=int)
+
+    # pos:neg=all
     negative_sample_index = np.random.choice(np.arange(len(whole_negative_index)),
-                                             size=10 * len(whole_positive_index), replace=False)
+                                             size=len(whole_negative_index), replace=False)
     data_set = np.zeros((len(negative_sample_index) + len(whole_positive_index), 3), dtype=int)
 
     count = 0
     for i in whole_positive_index:
-        data_set[count][0] = i[0]
-        data_set[count][1] = i[1]
-        data_set[count][2] = 1
+        data_set[count][0], data_set[count][1], data_set[count][2] = i[0], i[1], 1
         count += 1
     for i in negative_sample_index:
-        data_set[count][0] = whole_negative_index[i][0]
-        data_set[count][1] = whole_negative_index[i][1]
-        data_set[count][2] = 0
+        data_set[count][0], data_set[count][1], data_set[count][2] = \
+            whole_negative_index[i][0], whole_negative_index[i][1], 0
         count += 1
 
-    test_auc_round = []
-    test_aupr_round = []
-
-    rounds = args.rounds
-    for r in range(rounds):
+    print("----------------------------------------")
+    print('random_seed=', str(random_seed), 'task=', task)
+    print("----------------------------------------")
+    test_auc_fold = []
+    test_aupr_fold = []
+    kf = StratifiedKFold(n_splits=10, random_state=0, shuffle=True)
+    for index, (train_index, test_index) in enumerate(kf.split(data_set[:, :2], data_set[:, 2])):
         print("----------------------------------------")
-
-        test_auc_fold = []
-        test_aupr_fold = []
-        # 十倍交叉验证
-        # 指定seed
-        kf = StratifiedKFold(n_splits=10, random_state=0, shuffle=True)
-        k_fold = 0
-
-        for index, (train_index, test_index) in enumerate(kf.split(data_set[:, :2], data_set[:, 2])):
-            train = data_set[train_index]
-            DTItest = data_set[test_index]
-            # 在划分之后的train上再划分训练和验证集
-            DTItrain, DTIvalid = train_test_split(train, test_size=0.05, random_state=0)
-
-            k_fold += 1
-            print("--------------------------------------------------------------")
-            print("round ", r + 1, " of ", rounds, ":", "KFold ", k_fold, " of 10")
-            print("--------------------------------------------------------------")
-            node_feature = load_feature()
-            # HeCo 预训练
-            node_feature = HeCoPreTrain(DTItrain, node_feature, drug_d, drug_ch, drug_di, drug_side, protein_p,
-                                        protein_seq, protein_di, index, retrain)
-            # MLP练级预测
-            t_auc, t_aupr = MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature, index, retrain)
-            test_auc_fold.append(t_auc)
-            test_aupr_fold.append(t_aupr)
-
-        test_auc_round.append(np.mean(test_auc_fold))
-        test_aupr_round.append(np.mean(test_aupr_fold))
-        print("test_auc: ", test_auc_round, ' testaupr: ', test_aupr_round)
+        print('fold=', str(index))
+        print("----------------------------------------")
+        train_all, DTItest = data_set[train_index], data_set[test_index]
+        DTItrain, DTIvalid = train_test_split(train_all, test_size=0.05, random_state=0)
+        dir_name = '_task_' + task + '_rs' + str(random_seed) + '_fold' + str(index) + '.pt'
+        node_feature = load_feature()
+        node_feature = HeCoPreTrain(DTItrain, node_feature, drug_d, drug_ch, drug_di, drug_side, protein_p,
+                                    protein_seq, protein_di, index, retrain, dir_name)
+        t_auc, t_aupr = MLPLinkPred(DTItrain, DTIvalid, DTItest, args, node_feature, index, retrain, dir_name)
+        test_auc_fold.append(t_auc)
+        test_aupr_fold.append(t_aupr)
+    test_auc_mean = np.mean(test_auc_fold)
+    test_aupr_mean = np.mean(test_aupr_fold)
+    print("test_auc: ", test_auc_mean, ' testaupr: ', test_aupr_mean)
+    return test_auc_mean, test_aupr_mean
 
 
-def setup_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+def setup_seed(s):
+    torch.manual_seed(s)
+    torch.cuda.manual_seed_all(s)
+    np.random.seed(s)
+    random.seed(s)
     torch.backends.cudnn.deterministic = True
 
 
 if __name__ == "__main__":
-    setup_seed(args.random_state)
-    main(retrain=True)
+    seeds = [7, 8, 15, 16, 21, 22, 35, 36, 47, 48, 55, 56]
+    # seeds = [7, 8]
+    task = 'all_negative'
+    now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    print(now_time)
+    with open('../../result/HGCL_DTI/' + task + '_auc', 'w') as f:
+        f.write(now_time + '\n')
+    with open('../../result/HGCL_DTI/' + task + '_aupr', 'w') as f:
+        f.write(now_time + '\n')
+    for s in seeds:
+        start = time.time()
+        setup_seed(s)
+        auc, aupr = main(s, task)
+        with open('../../result/' + task + '_auc', 'a') as f:
+            f.write(str(auc) + '\n')
+        with open('../../result/' + task + '_aupr', 'a') as f:
+            f.write(str(aupr) + '\n')
+        end = time.time()
+        print("Total time:", end - start)

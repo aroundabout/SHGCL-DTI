@@ -1,9 +1,9 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import dgl
 import torch as th
-
+import sys
+sys.path.append('../')
 from tools.tools import l2_norm
 
 

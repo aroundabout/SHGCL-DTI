@@ -1,11 +1,4 @@
 import torch.nn as nn
-import torch as th
-
-from tools.args import parse_argsCO
-from tools.tools import compute_score
-
-args = parse_argsCO()
-device = args.device
 
 class MLPPredicator(nn.Module):
     def __init__(self, n_i, n_o):

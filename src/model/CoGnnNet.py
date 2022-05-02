@@ -1,8 +1,10 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from src.layers.mp_encoder import MpEncoder
-from src.layers.sc_encoder import ScEncoder
-from src.layers.contrast import Contrast
+import sys
+sys.path.append('../')
+from layers.mp_encoder import MpEncoder
+from layers.sc_encoder import ScEncoder
+from layers.contrast import Contrast
 
 
 class HeCo(nn.Module):
