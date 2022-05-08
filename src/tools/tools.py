@@ -68,7 +68,7 @@ def saveTxt(features: list[str], path: str):
     print("txt save finished")
 
 
-def load_data():
+def load_data(dti_path='mat_drug_protein.txt'):
     network_path = '../../data/data/'
     true_drug = drug_len
 
@@ -90,23 +90,10 @@ def load_data():
     protein_sequence = protein_sequence / 100.
     protein_sequence = protein_sequence - np.identity(num_protein)
 
-    drug_protein = np.loadtxt(network_path + 'mat_drug_protein.txt')
+    drug_protein = np.loadtxt(network_path + dti_path)
 
     return drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, \
            protein_disease, drug_protein
-
-
-#
-def splitGraph(g, offset=0):
-    train_len = 0.9
-    test_len = 0.1
-    numEdges = int(g.num_edges(DR_PR_I))
-    test_range = (int(offset * numEdges * test_len), int((offset + 1) * numEdges * test_len))
-    x = np.ones(numEdges, dtype=bool)
-    x[test_range[0]:test_range[1]] = False
-    g.edges[DR_PR_I].data['train_mask'] = torch.from_numpy(x)
-    test_mask = ~x
-    g.edges[DR_PR_I].data['test_mask'] = torch.from_numpy(test_mask)
 
 
 def sparse_mx_to_torch_sparse_tensor(sparse_mx):
@@ -286,37 +273,6 @@ def getRandomWalkTrace(g: DGLHeteroGraph, args):
     return rwDict, edgeNameDict
 
 
-def ConstructGraphWithRW(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                         protein_disease, drug_protein, args):
-    g = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                       protein_disease, drug_protein, args)
-    rwDict, edgeNameDict = getRandomWalkTrace(g, args)
-    for k, firstdict in edgeNameDict.items():
-        for seck, edgename in firstdict.items():
-            g.add_edges(rwDict[k][seck][0], rwDict[k][seck][1], etype=edgename)
-    return g
-
-
-def ConstructGraphOnlyWithRW(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                             protein_disease, drug_protein, node_features, args):
-    g = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                       protein_disease, drug_protein, node_features, args)
-    rwDict, edgeNameDict = getRandomWalkTrace(g, args)
-    edgeNameDict['DR']['PR'] = (drug, DR_PR_I, protein)
-    edgeNameDict['PR']['DR'] = (protein, PR_DR_I, drug)
-    edgeNameDict.setdefault('DRA', {'PRA': (drug, DR_PR_A, protein)})
-    edgeNameDict.setdefault('PRA', {'DRA': (protein, PR_DR_A, drug)})
-    rwDict.setdefault('DRA', {'PRA': ([], [])})
-    rwDict.setdefault('PRA', {'DRA': ([], [])})
-    graphData = {
-        edgeNameDict[i][j]: (rwDict[i][j][0], rwDict[i][j][1]) for i, fi in rwDict.items() for j, sec in fi.items()
-    }
-    g_rw = dgl.heterograph(graphData)
-    g_rw.add_edges([], [], etype=(drug, DR_PR_A, protein))
-    g_rw.add_edges([], [], etype=(protein, PR_DR_A, drug))
-    return g_rw
-
-
 def construct_negative_graph(graph, k, etype):
     utype, _, vtype = etype
     src, dst = graph.edges(etype=etype)
@@ -371,24 +327,8 @@ def compute_score(pre, target, pos_weight=None):
     return loss, roc_auc, aupr
 
 
-def shuffle(pos_h, neg_h):
-    h = torch.cat((pos_h, neg_h), 0).cpu()
-    label = torch.cat(
-        (torch.ones((len(pos_h), 1), dtype=torch.float), torch.zeros((len(neg_h), 1), dtype=torch.long)), 0)
-    # 打乱h,label
-    h = h.detach().numpy()
-    label = label.detach().numpy()
-
-    p = numpy.column_stack((h, label))
-    numpy.random.shuffle(p)
-
-    h = torch.from_numpy(p[:, :-1]).to(device)
-    label = torch.from_numpy(p[:, -1:]).to(device)
-    return h, label
-
-
 def concat_link(dti, feat_src, feat_dst):
-    return torch.cat([feat_src[dti[:,0]], feat_dst[dti[:,1]]], 1)
+    return torch.cat([feat_src[dti[:, 0]], feat_dst[dti[:, 1]]], 1)
 
 
 def concat_link_pos(graph, feat_src, feat_dst, etype):
@@ -402,53 +342,6 @@ def concat_link_pos(graph, feat_src, feat_dst, etype):
         pos_h = graph.edata.pop('cat_feat')
 
     return pos_h
-
-
-# def concat_link(graph, neg_graph, feat_src, feat_dst, etype):
-#     def concat_message_function(edges):
-#         return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
-#
-#     with graph.local_scope():
-#         graph.nodes['drug'].data['feature'] = feat_src
-#         graph.nodes['protein'].data['feature'] = feat_dst
-#         graph.apply_edges(concat_message_function, etype=etype)
-#         pos_h = graph.edata.pop('cat_feat')
-#     with neg_graph.local_scope():
-#         neg_graph.nodes['drug'].data['feature'] = feat_src
-#         neg_graph.nodes['protein'].data['feature'] = feat_dst
-#         neg_graph.apply_edges(concat_message_function, etype=etype)
-#         neg_h = neg_graph.edata.pop('cat_feat')
-#
-#     return pos_h, neg_h
-
-
-def evaluate(model, test_graph, test_neg_graph, drug_feature, protein_feature, etype, pos_weight=None):
-    with torch.no_grad():
-        def concat_message_function(edges):
-            return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
-
-        with test_graph.local_scope():
-            test_graph.nodes['drug'].data['feature'] = drug_feature
-            test_graph.nodes['protein'].data['feature'] = protein_feature
-            test_graph.apply_edges(concat_message_function, etype=etype)
-            pos_h = test_graph.edata.pop('cat_feat')
-        with test_neg_graph.local_scope():
-            test_neg_graph.nodes['drug'].data['feature'] = drug_feature
-            test_neg_graph.nodes['protein'].data['feature'] = protein_feature
-            test_neg_graph.apply_edges(concat_message_function, etype=etype)
-            neg_h = test_neg_graph.edata.pop('cat_feat')
-        # 写法1
-        pre, target = predict_target_pair(model.pred(pos_h), model.pred(neg_h))
-
-        # 写法2
-        # h, target = shuffle(pos_h, neg_h)
-        # pre = model.pred(h)
-
-        loss, roc_auc, aupr = compute_score(pre, target, pos_weight=pos_weight)
-        pre_f1, target_f1 = torch.round(torch.sigmoid(pre.cpu())).detach().numpy(), \
-                            torch.round(torch.sigmoid(target.cpu())).detach().numpy()
-        f1 = f1_score(target_f1, pre_f1)
-        return roc_auc, aupr, f1, loss
 
 
 def l2_norm(t, axit=1):

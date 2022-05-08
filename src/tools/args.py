@@ -3,7 +3,7 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='CoDTI')
-    parser.add_argument("--device", type=str, default='cuda:2')
+    parser.add_argument("--device", type=str, default='cuda:3')
     parser.add_argument("--epochs", type=int, default=3000,
                         help="number of training epochs")
     parser.add_argument("--batch_size", type=int, default=2048),
@@ -33,5 +33,11 @@ def parse_args():
                         help='')
     parser.add_argument("--lam", type=float, default=0.5,
                         help='')
+
+    # 控制实验
+    parser.add_argument("--number", type=str, default='ten',
+                        help='控制负样本比例 ten为1:10 all为 全量')
+    parser.add_argument('--task', type=str, default='benchmark',
+                        help='实验分为正常数据benchmark,其他是disease,drug,homo_protein_drug,se,uni等')
 
     return parser.parse_args()

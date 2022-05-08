@@ -38,7 +38,6 @@ class HeCo(nn.Module):
         h_all = {}
         for k, v in h.items():
             h_all[k] = F.elu(self.fc_list[k](h[k]))
-            # h_all[k] = self.fc_list[k](h[k])
         return self.sc(graph, h_all)
 
     def forward(self, graph, mps_dict, h, pos_dict):
