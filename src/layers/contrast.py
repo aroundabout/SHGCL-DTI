@@ -5,26 +5,18 @@ import torch.nn as nn
 class Contrast(nn.Module):
     def __init__(self, out_dim, tau, lam, keys):
         super(Contrast, self).__init__()
-        self.proj_mp = nn.ModuleDict({k: nn.Sequential(
-            nn.Linear(out_dim, out_dim),
-            nn.ELU(),
-            nn.Linear(out_dim, out_dim)
-        ) for k in keys})
-        self.proj_sc = nn.ModuleDict({k: nn.Sequential(
+        self.proj = nn.ModuleDict({k: nn.Sequential(
             nn.Linear(out_dim, out_dim),
             nn.ELU(),
             nn.Linear(out_dim, out_dim)
         ) for k in keys})
         self.tau = tau
         self.lam = lam
-        for k, v in self.proj_mp.items():
+        for k, v in self.proj.items():
             for model in v:
                 if isinstance(model, nn.Linear):
                     nn.init.xavier_normal_(model.weight, gain=1.414)
-        for k, v in self.proj_sc.items():
-            for model in v:
-                if isinstance(model, nn.Linear):
-                    nn.init.xavier_normal_(model.weight, gain=1.414)
+
 
     def sim(self, z1, z2):
         z1_norm = torch.norm(z1, dim=-1, keepdim=True)
@@ -35,8 +27,8 @@ class Contrast(nn.Module):
         return sim_matrix
 
     def compute_loss(self, z_mp, z_sc, pos, k):
-        z_proj_mp = self.proj_mp[k](z_mp)
-        z_proj_sc = self.proj_sc[k](z_sc)
+        z_proj_mp = self.proj[k](z_mp)
+        z_proj_sc = self.proj[k](z_sc)
 
         matrix_mp2sc = self.sim(z_proj_mp, z_proj_sc)
         matrix_sc2mp = matrix_mp2sc.t()

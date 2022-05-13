@@ -121,7 +121,7 @@ def load_feature():
 
 
 def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
-                   protein_disease, drug_protein, args=None, CO=False) -> DGLHeteroGraph:
+                   protein_disease, drug_protein, args=None, CO=True) -> DGLHeteroGraph:
     num_drug = len(drug_drug)
     num_protein = len(protein_protein)
     num_disease = len(drug_disease.T)
@@ -318,6 +318,13 @@ def binary_acc(preds, y):
     return acc
 
 
+def compute_auc_aupr(pre, target):
+    roc_auc = roc_auc_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
+    precision, recall, threshold = precision_recall_curve(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
+    aupr = auc(recall, precision)
+    return roc_auc, aupr
+
+
 def compute_score(pre, target, pos_weight=None):
     loss = compute_loss(pre, target, pos_weight=pos_weight)
     roc_auc = roc_auc_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
@@ -358,6 +365,7 @@ def row_normalize(t):
     output = t / row_sums[:, None]
     output[th.isnan(output) | th.isinf(output)] = 0.0
     return output
+
 
 
 def normalize_adj(adj):

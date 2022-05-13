@@ -3,6 +3,7 @@ import torch.nn as nn
 import dgl
 import torch as th
 import sys
+
 sys.path.append('../')
 from tools.tools import l2_norm
 
@@ -27,11 +28,7 @@ class BetaAttention(nn.Module):
             if callable(set_allow_zero_in_degree_fn):
                 set_allow_zero_in_degree_fn(True)
 
-    def forward(self, g, inputs, mod_args=None, mod_kwargs=None):
-        if mod_args is None:
-            mod_args = {}
-        if mod_kwargs is None:
-            mod_kwargs = {}
+    def forward(self, g, inputs):
         outputs = {dty: {} for dty in g.dsttypes}
         beta = {dty: {} for dty in g.dsttypes}
         attn_curr = {}
@@ -42,11 +39,7 @@ class BetaAttention(nn.Module):
             rel_graph = g[stype, etype, dtype]
             if stype not in inputs:
                 continue
-            dstdata = self.mods[etype](
-                rel_graph,
-                (inputs[stype], inputs[dtype]),
-                *mod_args.get(etype, ()),
-                **mod_kwargs.get(etype, {}))
+            dstdata = self.mods[etype](rel_graph, (inputs[stype], inputs[dtype]))
             sp = self.tanh(self.fc(dstdata)).mean(dim=0)
             beta[dtype][stype] = (attn_curr.get(dtype).matmul(sp.t()))
             outputs[dtype][stype] = dstdata
@@ -76,7 +69,6 @@ class AlphaAttention(nn.Module):
                  *,
                  weight=True,
                  bias=True,
-                 activation=None,
                  self_loop=True,
                  dropout=0.2,
                  num_heads=3):
@@ -86,7 +78,6 @@ class AlphaAttention(nn.Module):
         self.rel_names = rel_names
         self.num_bases = num_bases
         self.bias = bias
-        self.activation = activation
         self.self_loop = self_loop
 
         self.conv = BetaAttention({
@@ -94,39 +85,26 @@ class AlphaAttention(nn.Module):
             for rel in rel_names
         }, attn_drop, ntypes, in_size, out_size)
 
-        self.use_weight = weight
-        self.use_basis = num_bases < len(self.rel_names) and weight
-        if self.use_weight:
-            if self.use_basis:
-                self.basis = dgl.nn.pytorch.WeightBasis((in_size, out_size), num_bases, len(self.rel_names))
-            else:
-                self.weight = nn.Parameter(th.Tensor(len(self.rel_names), in_size, out_size))
-                nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain('relu'))
-
-        # bias
         if bias:
             self.h_bias = nn.Parameter(th.Tensor(out_size))
             nn.init.zeros_(self.h_bias)
 
-        # weight for self loop
         if self.self_loop:
             self.loop_weight = nn.Parameter(th.Tensor(in_size, out_size))
             nn.init.xavier_uniform_(self.loop_weight,
                                     gain=nn.init.calculate_gain('relu'))
-
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, g, inputs):
         g = g.local_var()
         wdict = {}
-
         if g.is_block:
             inputs_src = inputs
+            print("g isblock")
             inputs_dst = {k: v[:g.number_of_dst_nodes(k)] for k, v in inputs.items()}
         else:
             inputs_src = inputs_dst = inputs
-
-        hs = self.conv(g, inputs, mod_kwargs=wdict)
+        hs = self.conv(g, inputs)
         hs = {k: th.mean(v, 1) for k, v in hs.items()}
 
         def _apply(ntype, h):
@@ -134,8 +112,6 @@ class AlphaAttention(nn.Module):
                 h = h + th.matmul(inputs_dst[ntype], self.loop_weight)
             if self.bias:
                 h = h + self.h_bias
-            if self.activation:
-                h = self.activation(h)
             return self.dropout(h)
 
         return {ntype: _apply(ntype, h) for ntype, h in hs.items()}
@@ -143,12 +119,10 @@ class AlphaAttention(nn.Module):
 
 class ScEncoder(nn.Module):
     def __init__(self, in_feat, out_feat, rel_name, ntypes, attn_drop,
-                 num_bases, weight=True, bias=True, self_loop=True, dropout=0.5, num_heads=8):
+                 num_bases, weight=True, bias=True, self_loop=True, dropout=0.5, num_heads=5):
         super(ScEncoder, self).__init__()
         self.conv1 = AlphaAttention(in_feat, out_feat, rel_name, ntypes, attn_drop, num_bases, weight=weight, bias=bias,
                                     self_loop=self_loop, dropout=dropout, num_heads=num_heads)
 
     def forward(self, g, inputs):
-        h = self.conv1(g, inputs)
-        h = {k: l2_norm(v) for k, v in h.items()}
-        return h
+        return self.conv1(g, inputs)

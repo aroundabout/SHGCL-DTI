@@ -2,9 +2,13 @@ import numpy
 import numpy as np
 import scipy.sparse as sp
 from collections import Counter
-from src.tools.tools import load_data, ConstructGraph
-from src.tools.args import parse_args
+from tools.tools import load_data, ConstructGraph, sparse_mx_to_torch_sparse_tensor
 from scipy.sparse import coo_matrix
+
+drug = 'drug'
+protein = 'protein'
+disease = 'disease'
+sideeffect = 'sideeffect'
 
 DR_PR_I = 'drug_protein interaction'
 PR_DR_I = 'protein_drug interaction'
@@ -29,6 +33,19 @@ SE_PR_A = 'sideeffect_protein association'
 SE_DI_A = 'sideeffect_disease association'
 SE_SE_A = 'sideeffect_sideeffect association'
 
+drug_pos_num = 40
+protein_pos_num = 80
+sideeffect_pos_num = 80
+disease_pos_num = 80
+
+drug_num = 708
+protein_num = 1512
+sideeffect_num = 4192
+disease_num = 5603
+
+drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, \
+protein_sequence, protein_disease, dti_original = load_data()
+
 
 def getMetaPathSrcAndDst(g, metapath):
     adj = 1
@@ -39,60 +56,68 @@ def getMetaPathSrcAndDst(g, metapath):
     return adj
 
 
-drug_pos_num = 20
-drug_num = 708
-protein_pos_num = 40
-protein_num = 1512
-sideeffect_pos_num = 40
-sideeffect_num = 4192
-disease_pos_num = 40
-disease_num = 5603
+def get_pos(g, device):
+    def generate_pos(node_all, node_pos, node_pos_num):
+        for i in range(len(node_all)):
+            one = node_all[i].nonzero()[0]
+            if len(one) > node_pos_num:
+                oo = np.argsort(-node_all[i, one])
+                sele = one[oo[:node_pos_num]]
+                node_pos[i, sele] = 1
+            else:
+                node_pos[i, one] = 1
+        return sp.coo_matrix(node_pos)
 
-drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, \
-protein_sequence, protein_disease, dti_original = load_data()
-
-# 构建异质图
-args = parse_args()
-
-
-def get_pos(g):
     drdrdr = getMetaPathSrcAndDst(g, [DR_DR_A, DR_DR_A])
     drprdr = getMetaPathSrcAndDst(g, [DR_PR_I, PR_DR_I])
     drsedr = getMetaPathSrcAndDst(g, [DR_SE_A, SE_DR_A])
     drdidr = getMetaPathSrcAndDst(g, [DR_DI_A, DI_DR_A])
-    drdrdr = drdrdr / (drdrdr.sum(axis=-1)+1e-12).reshape(-1, 1)
-    drprdr = drprdr / (drprdr.sum(axis=-1)+1e-12).reshape(-1, 1)
-    drsedr = drsedr / (drsedr.sum(axis=-1)+1e-12).reshape(-1, 1)
-    drdidr = drdidr / (drdidr.sum(axis=-1)+1e-12).reshape(-1, 1)
-
-    drug_all = (drdrdr + drprdr + drsedr + drdidr).A.astype("float32")
+    drdrdr = drdrdr / (drdrdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drprdr = drprdr / (drprdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drsedr = drsedr / (drsedr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drdidr = drdidr / (drdidr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drug_all = (drdrdr + drprdr + drsedr + drdidr + coo_matrix(np.identity(drug_num))).A.astype("float32")
     drug_pos = np.zeros((drug_num, drug_num))
-    for i in range(len(drug_all)):
-        one = drug_all[i].nonzero()[0]
-        if len(one) > drug_pos_num:
-            oo = np.argsort(-drug_all[i, one])
-            sele = one[oo[:drug_pos_num]]
-            drug_pos[i, sele] = 1
-        else:
-            drug_pos[i, one] = 1
-    drug_pos = sp.coo_matrix(drug_pos)
+    drug_pos = generate_pos(drug_all, drug_pos, drug_pos_num)
 
     # protein
     prdrpr = getMetaPathSrcAndDst(g, [PR_DR_I, DR_PR_I])
     prprpr = getMetaPathSrcAndDst(g, [PR_PR_A, PR_PR_A])
     prdipr = getMetaPathSrcAndDst(g, [PR_DI_A, DI_PR_A])
-    prdrpr = prdrpr / (prdrpr.sum(axis=-1)+1e-12).reshape(-1, 1)
-    prprpr = prprpr / (prprpr.sum(axis=-1)+1e-12).reshape(-1, 1)
-    prdipr = prdipr / (prdipr.sum(axis=-1)+1e-12).reshape(-1, 1)
-    protein_all = (prdrpr + prprpr + prdipr).A.astype("float32")
+    prdrpr = prdrpr / (prdrpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    prprpr = prprpr / (prprpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    prdipr = prdipr / (prdipr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    protein_all = (prdrpr + prprpr + prdipr + coo_matrix(np.identity(protein_num))).A.astype("float32")
     protein_pos = np.zeros((protein_num, protein_num))
-    for i in range(len(protein_all)):
-        one = protein_all[i].nonzero()[0]
-        if len(one) > protein_pos_num:
-            oo = np.argsort(-protein_all[i, one])
-            sele = one[oo[:protein_pos_num]]
-            protein_pos[i, sele] = 1
-        else:
-            protein_pos[i, one] = 1
-    protein_pos = sp.coo_matrix(protein_pos)
-    return drug_pos, protein_pos
+    protein_pos = generate_pos(protein_all, protein_pos, protein_pos_num)
+
+    # didrdi = getMetaPathSrcAndDst(g, [DI_DR_A, DR_DI_A])
+    # diprdi = getMetaPathSrcAndDst(g, [DI_PR_A, PR_DI_A])
+    # didrdi = didrdi / (didrdi.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    # diprdi = diprdi / (diprdi.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    # disease_all = (didrdi + diprdi + coo_matrix(np.identity(disease_num))).A.astype("float32")
+    # disease_pos = np.zeros((disease_num, disease_num))
+    # disease_pos = generate_pos(disease_all, disease_pos, disease_pos_num)
+    #
+    # sedrse = getMetaPathSrcAndDst(g, [SE_DR_A, DR_SE_A])
+    # sedrse = sedrse / (sedrse.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    # sideeffect_all = (sedrse + coo_matrix(np.identity(sideeffect_num))).A.astype("float32")
+    # sideeffect_pos = np.zeros((sideeffect_num, sideeffect_num))
+    # sideeffect_pos = generate_pos(sideeffect_all, sideeffect_pos, sideeffect_pos_num)
+    pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
+                protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device)}
+    # pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
+    #             protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device),
+    #             disease: sparse_mx_to_torch_sparse_tensor(disease_pos).to(device),
+    #             sideeffect: sparse_mx_to_torch_sparse_tensor(sideeffect_pos).to(device)}
+    return pos_dict
+
+
+def get_pos_identity():
+    drug_pos = np.zeros((drug_num, drug_num))
+    protein_pos = np.zeros((protein_num, protein_num))
+    for i in range(drug_num):
+        drug_pos[i, i] = 1
+    for i in range(protein_num):
+        protein_pos[i, i] = 1
+    return sp.coo_matrix(drug_pos), sp.coo_matrix(protein_pos)

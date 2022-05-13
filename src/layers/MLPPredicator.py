@@ -1,5 +1,6 @@
 import torch.nn as nn
 
+
 class MLPPredicator(nn.Module):
     def __init__(self, n_i, n_o):
         super(MLPPredicator, self).__init__()
@@ -14,5 +15,4 @@ class MLPPredicator(nn.Module):
         )
 
     def forward(self, h):
-        out = self.linear(h)
-        return out
+        return self.linear(h)

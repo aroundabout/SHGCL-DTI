@@ -38,13 +38,18 @@ drprdr = np.matmul(drpr, drpr.T) > 0
 drprdr = sp.coo_matrix(drprdr)
 sp.save_npz('../../data/mp/drprdr.npz', drprdr)
 
-drdidr = np.matmul(drdi,drdi.T) > 0
+drdidr = np.matmul(drdi, drdi.T) > 0
 drdidr = sp.coo_matrix(drdidr)
 sp.save_npz('../../data/mp/drdidr.npz', drdidr)
 
 drsedr = np.matmul(drse, drse.T) > 0
 drsedr = sp.coo_matrix(drsedr)
 sp.save_npz('../../data/mp/drsedr.npz', drsedr)
+
+drdipr = np.matmul(drdi, prdi.T)
+drdiprdidr = np.matmul(drdipr, drdipr.T) > 0
+drdiprdidr = sp.coo_matrix(drdiprdidr)
+sp.save_npz('../../data/mp/drdiprdidr.npz', drdiprdidr)
 
 # protein
 prdrpr = np.matmul(drpr.T, drpr) > 0
@@ -58,6 +63,11 @@ sp.save_npz('../../data/mp/prprpr.npz', prprpr)
 prdipr = np.matmul(prdi, prdi.T) > 0
 prdipr = sp.coo_matrix(prdipr)
 sp.save_npz('../../data/mp/prdipr.npz', prdipr)
+
+prdidr = np.matmul(prdi, drdi.T) > 0
+prdidrdipr = np.matmul(prdidr, prdidr.T)
+prdidrdipr = sp.coo_matrix(prdidrdipr)
+sp.save_npz('../../data/mp/prdidrdipr.npz', prdidrdipr)
 
 # disease
 didrdi = np.matmul(drdi.T, drdi) > 0

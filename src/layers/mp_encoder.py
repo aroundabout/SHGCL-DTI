@@ -1,9 +1,11 @@
+import time
+
 import torch
 import torch.nn as nn
 import sys
+
 sys.path.append('../')
 from tools.tools import l2_norm
-
 
 
 class GCN(nn.Module):
@@ -61,7 +63,7 @@ class MPAttention(nn.Module):
         beta = self.softmax(beta)
         z_mp = 0
         for i in range(len(embeds)):
-            z_mp += embeds[i]*beta[i]
+            z_mp += embeds[i] * beta[i]
         return z_mp
 
 
@@ -73,9 +75,10 @@ class MpEncoder(nn.Module):
         self.att = MPAttention(hidden_dim, attn_drop)
 
     def forward(self, h, mps):
+        if self.P == 0:
+            return h
         embeds = []
         for i in range(self.P):
             embeds.append(self.node_level[i](h, mps[i]))
         z_mp = self.att(embeds)
-        z_mp = l2_norm(z_mp)
         return z_mp
