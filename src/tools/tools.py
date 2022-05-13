@@ -1,3 +1,5 @@
+from random import random
+
 import numpy
 import numpy as np
 import dgl
@@ -378,3 +380,11 @@ def normalize_adj(adj):
     d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
     new_adj = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt) + d_self_loop
     return new_adj.tocoo()
+
+
+def setup_seed(s):
+    torch.manual_seed(s)
+    torch.cuda.manual_seed_all(s)
+    np.random.seed(s)
+    random.seed(s)
+    torch.backends.cudnn.deterministic = True

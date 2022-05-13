@@ -6,7 +6,7 @@ def parse_args():
     parser.add_argument("--device", type=str, default='cuda:1')
     parser.add_argument("--epochs", type=int, default=3000,
                         help="number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=2048),
+    # parser.add_argument("--batch_size", type=int, default=2048),
     parser.add_argument("--random_state", type=int, default=18,
                         help="")
     # 公用
@@ -35,10 +35,8 @@ def parse_args():
                         help='')
     parser.add_argument("--cl", type=float, default=5,
                         help='')
-
     parser.add_argument("--reg_lambda", type=float, default=1,
                         help='')
-
     # 控制实验
     parser.add_argument("--number", type=str, default='ten',
                         help='控制负样本比例 ten为1:10 all为 全量')
