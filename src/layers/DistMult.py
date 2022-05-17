@@ -1,13 +1,8 @@
-import time
-
-import dgl
-import torch.nn.functional as F
 import torch as th
 import torch.nn as nn
 
-from tools.tools import row_normalize, l2_norm
-from layers.contrast import Contrast
-from layers.mp_encoder import MpEncoder
+from tools.tools import args
+
 
 class DistMult(nn.Module):
     def __init__(self, dim_embedding):
@@ -57,6 +52,31 @@ class DistMult(nn.Module):
         drug_protein_reconstruct = th.mm(th.mm(drug_vector, self.re_D_P), protein_vector.t())
         tmp = th.mul(drug_protein_mask.float(), (drug_protein_reconstruct - drug_protein.float()))
         drug_protein_reconstruct_loss = th.sum(tmp ** 2)
+
+        edge_mask = args.edge_mask
+        if edge_mask == 'drug':
+            drug_drug_reconstruct_loss = 0
+        elif edge_mask == 'protein':
+            protein_protein_reconstruct_loss = 0
+        elif edge_mask == 'drug,protein':
+            drug_drug_reconstruct_loss = 0
+            protein_protein_reconstruct_loss = 0
+        elif edge_mask == 'disease':
+            drug_disease_reconstruct_loss = 0
+            protein_disease_reconstruct_loss = 0
+        elif edge_mask == 'sideeffect':
+            drug_sideeffect_reconstruct_loss = 0
+        elif edge_mask == 'disease,sideeffect':
+            drug_disease_reconstruct_loss = 0
+            protein_disease_reconstruct_loss = 0
+            drug_sideeffect_reconstruct_loss = 0
+        elif edge_mask == 'drugsim':
+            drug_chemical_reconstruct_loss = 0
+        elif edge_mask == 'proteinsim':
+            protein_sequence_reconstruct_loss = 0
+        elif edge_mask == 'drugsim,proteinsim':
+            drug_chemical_reconstruct_loss = 0
+            protein_sequence_reconstruct_loss = 0
 
         other_loss = drug_drug_reconstruct_loss + drug_chemical_reconstruct_loss + drug_disease_reconstruct_loss + \
                      drug_sideeffect_reconstruct_loss + protein_protein_reconstruct_loss + \

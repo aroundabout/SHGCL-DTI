@@ -3,8 +3,8 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='CoDTI')
-    parser.add_argument("--device", type=str, default='cuda:1')
-    parser.add_argument("--epochs", type=int, default=3000,
+    parser.add_argument("--device", type=str, default='cuda:0')
+    parser.add_argument("--epochs", type=int, default=5000,
                         help="number of training epochs")
     # parser.add_argument("--batch_size", type=int, default=2048),
     parser.add_argument("--random_state", type=int, default=18,
@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument("--number", type=str, default='ten',
                         help='控制负样本比例 ten为1:10 all为 全量')
     parser.add_argument('--task', type=str, default='benchmark',
-                        help='实验分为正常数据benchmark,其他是disease,drug,homo_protein_drug,se,uni等')
-
+                        help='实验分为正常数据benchmark,其他是disease,drug,homo_protein_drug,sideeffect,uni等')
+    parser.add_argument('--edge_mask', type=str, default='drug',
+                        help='控制实验中是否要mask某些边 drug protein drug,protein disease sideeffect disease,sideeffect'
+                             'drugsim proteinsim drugsim,proteinsim')
     return parser.parse_args()

@@ -94,6 +94,31 @@ def load_data(dti_path='mat_drug_protein.txt'):
 
     drug_protein = np.loadtxt(network_path + dti_path)
 
+    edge_mask = args.edge_mask
+    if edge_mask == 'drug':
+        drug_drug[drug_drug != 0] = 0
+    elif edge_mask == 'protein':
+        protein_protein[protein_protein != 0] = 0
+    elif edge_mask == 'drug,protein':
+        drug_drug[drug_drug != 0] = 0
+        protein_protein[protein_protein != 0] = 0
+    elif edge_mask == 'disease':
+        drug_disease[drug_disease != 0] = 0
+        protein_disease[protein_disease != 0] = 0
+    elif edge_mask == 'sideeffect':
+        drug_sideeffect[drug_sideeffect != 0] = 0
+    elif edge_mask == 'disease,sideeffect':
+        drug_disease[drug_disease != 0] = 0
+        protein_disease[protein_disease != 0] = 0
+        drug_sideeffect[drug_sideeffect != 0] = 0
+    elif edge_mask == 'drugsim':
+        drug_chemical[drug_chemical != 0] = 0
+    elif edge_mask == 'proteinsim':
+        protein_sequence[protein_sequence != 0] = 0
+    elif edge_mask == 'drugsim,proteinsim':
+        drug_chemical[drug_chemical != 0] = 0
+        protein_sequence[protein_sequence != 0] = 0
+
     return drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence, \
            protein_disease, drug_protein
 
@@ -367,7 +392,6 @@ def row_normalize(t):
     output = t / row_sums[:, None]
     output[th.isnan(output) | th.isinf(output)] = 0.0
     return output
-
 
 
 def normalize_adj(adj):

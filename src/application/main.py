@@ -18,7 +18,7 @@ from layers.MLPPredicator import MLPPredicator
 from tools.args import parse_args
 from tools.tools import load_data, ConstructGraph, load_feature, construct_postive_graph, \
     sparse_mx_to_torch_sparse_tensor, l2_norm, concat_link, normalize_adj, compute_score, compute_loss, \
-    compute_auc_aupr, setup_seed
+    compute_auc_aupr
 from data_process.GetPos import get_pos, get_pos_identity
 from tools.EarlyStopping import EarlyStopping
 from tools.DTIDataSet import DTIDataSet
@@ -546,6 +546,12 @@ def main_unique(random_seed, task_name, dti_path='mat_drug_protein.txt', retrain
     print("test_auc: ", test_auc_mean, ' testaupr: ', test_aupr_mean)
     return test_auc_mean, test_aupr_mean
 
+def setup_seed(s):
+    torch.manual_seed(s)
+    torch.cuda.manual_seed_all(s)
+    np.random.seed(s)
+    random.seed(s)
+    torch.backends.cudnn.deterministic = True
 
 if __name__ == "__main__":
     seeds = [88, 107, 15, 16, 21, 22, 35, 36, 47, 48, 55, 56]

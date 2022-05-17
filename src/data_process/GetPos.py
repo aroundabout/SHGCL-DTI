@@ -70,24 +70,40 @@ def get_pos(g, device):
 
     drdrdr = getMetaPathSrcAndDst(g, [DR_DR_A, DR_DR_A])
     drprdr = getMetaPathSrcAndDst(g, [DR_PR_I, PR_DR_I])
-    drsedr = getMetaPathSrcAndDst(g, [DR_SE_A, SE_DR_A])
-    drdidr = getMetaPathSrcAndDst(g, [DR_DI_A, DI_DR_A])
+    drprprdr = getMetaPathSrcAndDst(g, [DR_PR_I, PR_PR_A, PR_DR_I])
+    drprdrprdr = getMetaPathSrcAndDst(g, [DR_PR_I, PR_DR_I, DR_PR_I, PR_DR_I])
+    drprdiprdr = getMetaPathSrcAndDst(g, [DR_PR_I, PR_DI_A, DI_PR_A, PR_DR_I])
+    # drsedr = getMetaPathSrcAndDst(g, [DR_SE_A, SE_DR_A])
+    # drdidr = getMetaPathSrcAndDst(g, [DR_DI_A, DI_DR_A])
     drdrdr = drdrdr / (drdrdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
     drprdr = drprdr / (drprdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
-    drsedr = drsedr / (drsedr.sum(axis=-1) + 1e-12).reshape(-1, 1)
-    drdidr = drdidr / (drdidr.sum(axis=-1) + 1e-12).reshape(-1, 1)
-    drug_all = (drdrdr + drprdr + drsedr + drdidr + coo_matrix(np.identity(drug_num))).A.astype("float32")
+    drprprdr = drprprdr / (drprprdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drprdrprdr = drprdrprdr / (drprdrprdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drprdiprdr = drprdiprdr / (drprdiprdr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+
+    # drsedr = drsedr / (drsedr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    # drdidr = drdidr / (drdidr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    drug_all = (drdrdr + drprdr + drprprdr + drprdrprdr + drprdiprdr + coo_matrix(np.identity(drug_num))).A.astype(
+        "float32")
     drug_pos = np.zeros((drug_num, drug_num))
     drug_pos = generate_pos(drug_all, drug_pos, drug_pos_num)
 
     # protein
     prdrpr = getMetaPathSrcAndDst(g, [PR_DR_I, DR_PR_I])
     prprpr = getMetaPathSrcAndDst(g, [PR_PR_A, PR_PR_A])
-    prdipr = getMetaPathSrcAndDst(g, [PR_DI_A, DI_PR_A])
+    prdrprdrpr = getMetaPathSrcAndDst(g, [PR_DR_I, DR_PR_I, PR_DR_I, DR_PR_I])
+    prprprpr = getMetaPathSrcAndDst(g, [PR_PR_A, PR_PR_A, PR_PR_A])
+    prdrdrpr = getMetaPathSrcAndDst(g, [PR_DR_I, DR_DR_A, DR_PR_I])
+    # prdipr = getMetaPathSrcAndDst(g, [PR_DI_A, DI_PR_A])
     prdrpr = prdrpr / (prdrpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
     prprpr = prprpr / (prprpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
-    prdipr = prdipr / (prdipr.sum(axis=-1) + 1e-12).reshape(-1, 1)
-    protein_all = (prdrpr + prprpr + prdipr + coo_matrix(np.identity(protein_num))).A.astype("float32")
+    prdrprdrpr = prdrprdrpr / (prdrprdrpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    prprprpr = prprprpr / (prprprpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    prdrdrpr = prdrdrpr / (prdrdrpr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+
+    # prdipr = prdipr / (prdipr.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    protein_all = (prdrpr + prprpr + prdrprdrpr + prprprpr + prdrdrpr + coo_matrix(np.identity(protein_num))).A.astype(
+        "float32")
     protein_pos = np.zeros((protein_num, protein_num))
     protein_pos = generate_pos(protein_all, protein_pos, protein_pos_num)
 
@@ -99,13 +115,16 @@ def get_pos(g, device):
     # disease_pos = np.zeros((disease_num, disease_num))
     # disease_pos = generate_pos(disease_all, disease_pos, disease_pos_num)
     #
-    # sedrse = getMetaPathSrcAndDst(g, [SE_DR_A, DR_SE_A])
-    # sedrse = sedrse / (sedrse.sum(axis=-1) + 1e-12).reshape(-1, 1)
-    # sideeffect_all = (sedrse + coo_matrix(np.identity(sideeffect_num))).A.astype("float32")
-    # sideeffect_pos = np.zeros((sideeffect_num, sideeffect_num))
-    # sideeffect_pos = generate_pos(sideeffect_all, sideeffect_pos, sideeffect_pos_num)
+    sedrse = getMetaPathSrcAndDst(g, [SE_DR_A, DR_SE_A])
+    sedrse = sedrse / (sedrse.sum(axis=-1) + 1e-12).reshape(-1, 1)
+    sideeffect_all = (sedrse + coo_matrix(np.identity(sideeffect_num))).A.astype("float32")
+    sideeffect_pos = np.zeros((sideeffect_num, sideeffect_num))
+    sideeffect_pos = generate_pos(sideeffect_all, sideeffect_pos, sideeffect_pos_num)
     pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
                 protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device)}
+    # pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
+    #             protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device),
+    #             sideeffect_pos: sparse_mx_to_torch_sparse_tensor(sideeffect_pos).to(device)}
     # pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
     #             protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device),
     #             disease: sparse_mx_to_torch_sparse_tensor(disease_pos).to(device),

@@ -1,6 +1,8 @@
 import torch.nn.functional as F
 import torch as th
 import torch.nn as nn
+
+from layers.SemanticsAttention import SemanticsAttention
 from tools.tools import row_normalize
 
 drug = 'drug'
@@ -26,7 +28,7 @@ class SCencoder(nn.Module):
         self.fc_Di_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
         self.fc_Di_P = nn.Linear(self.dim_embedding, self.dim_embedding).float()
         self.fc_Side_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
-        # self.semantics_attention = {k: SemanticsAttention(out_dim, attn_drop=0.2) for k in keys}
+        # self.semantics_attention = nn.ModuleDict({k: SemanticsAttention(out_dim, attn_drop=0.2) for k in keys})
         self.reset_parameters()
 
     def reset_parameters(self):
