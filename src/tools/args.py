@@ -42,7 +42,7 @@ def parse_args():
                         help='控制负样本比例 ten为1:10 all为 全量')
     parser.add_argument('--task', type=str, default='benchmark',
                         help='实验分为正常数据benchmark,其他是disease,drug,homo_protein_drug,sideeffect,uni等')
-    parser.add_argument('--edge_mask', type=str, default='drug',
+    parser.add_argument('--edge_mask', type=str, default='drug,protein',
                         help='控制实验中是否要mask某些边 drug protein drug,protein disease sideeffect disease,sideeffect'
                              'drugsim proteinsim drugsim,proteinsim')
     return parser.parse_args()
