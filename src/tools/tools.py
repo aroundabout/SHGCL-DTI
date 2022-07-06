@@ -144,7 +144,38 @@ def load_feature():
         numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32).to(device)
     node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
                      sideeffect: sideeffect_feats}
-    return node_features
+    feat_dim = {drug: 128, protein: 128, disease: 128, sideeffect: 128}
+    return node_features, feat_dim
+
+
+def load_feature_ori():
+    disease_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
+    drug_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/drug_feature_167.txt")).to(torch.float32).to(device)
+    protein_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/protein_feature_420.txt")).to(torch.float32).to(device)
+    sideeffect_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32).to(device)
+    node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
+                     sideeffect: sideeffect_feats}
+    feat_dim = {drug: 167, protein: 420, disease: 128, sideeffect: 128}
+    return node_features, feat_dim
+
+
+def load_feature2():
+    disease_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
+    drug_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/drug_feature_167.txt")).to(torch.float32).to(device)
+    protein_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/protein_feature_8420.txt")).to(torch.float32).to(device)
+    sideeffect_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32).to(device)
+    node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
+                     sideeffect: sideeffect_feats}
+    feat_dim = {drug: 167, protein: 8420, disease: 128, sideeffect: 128}
+    return node_features, feat_dim
 
 
 def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,

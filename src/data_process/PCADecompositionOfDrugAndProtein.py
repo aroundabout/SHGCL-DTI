@@ -5,7 +5,7 @@ from sklearn.decomposition import PCA
 estimator1 = PCA(n_components=128)
 estimator2 = PCA(n_components=128)
 
-protein_feature_420 = np.loadtxt("../../data/feature/protein_feature_420.txt")
+protein_feature_420 = np.loadtxt("../../data/feature/protein_feature_8420.txt")
 drug_feature_167 = np.loadtxt("../../data/feature/drug_feature_167.txt")
 
 protein_feature = estimator1.fit_transform(protein_feature_420)

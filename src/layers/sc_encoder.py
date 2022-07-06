@@ -1,128 +1,72 @@
-import torch
-import torch.nn as nn
-import dgl
+import torch.nn.functional as F
 import torch as th
-import sys
+import torch.nn as nn
 
-sys.path.append('../')
-from tools.tools import l2_norm
+from layers.SemanticsAttention import SemanticsAttention
+from tools.tools import row_normalize
 
-
-class BetaAttention(nn.Module):
-    def __init__(self, mods, attn_drop, ntypes, in_size: int, out_size: int):
-        super(BetaAttention, self).__init__()
-        self.mods = nn.ModuleDict(mods)
-        self.att = nn.ParameterDict(
-            {k: nn.Parameter(torch.empty(size=(1, out_size)), requires_grad=True) for k in ntypes})
-        for k in ntypes:
-            nn.init.xavier_uniform_(self.att[k], gain=1.414)
-        self.tanh = nn.Tanh()
-        self.softmax = nn.Softmax()
-        self.fc = nn.Linear(out_size, out_size, bias=True)
-        if attn_drop:
-            self.attn_drop = nn.Dropout(attn_drop)
-        else:
-            self.attn_drop = lambda x: x
-        for _, v in self.mods.items():
-            set_allow_zero_in_degree_fn = getattr(v, 'set_allow_zero_in_degree', None)
-            if callable(set_allow_zero_in_degree_fn):
-                set_allow_zero_in_degree_fn(True)
-
-    def forward(self, g, inputs):
-        outputs = {dty: {} for dty in g.dsttypes}
-        beta = {dty: {} for dty in g.dsttypes}
-        attn_curr = {}
-        for k in g.dsttypes:
-            attn_curr[k] = self.attn_drop(self.att[k])
-
-        for stype, etype, dtype in g.canonical_etypes:
-            rel_graph = g[stype, etype, dtype]
-            if stype not in inputs:
-                continue
-            dstdata = self.mods[etype](rel_graph, (inputs[stype], inputs[dtype]))
-            sp = self.tanh(self.fc(dstdata)).mean(dim=0)
-            beta[dtype][stype] = (attn_curr.get(dtype).matmul(sp.t()))
-            outputs[dtype][stype] = dstdata
-        for k, v in beta.items():
-            beta[k] = list(v.values())
-            beta[k] = torch.cat(beta[k], dim=-1).view(-1)
-            beta[k] = self.softmax(beta[k])
-        for k, v in outputs.items():
-            outputs[k] = list(v.values())
-
-        rsts = {k: 0 for k in g.dsttypes}
-        for nty, alist in outputs.items():
-            if len(alist) != 0:
-                for i in range(len(alist)):
-                    rsts[nty] += alist[i] * beta[nty][i]
-        return rsts
-
-
-class AlphaAttention(nn.Module):
-    def __init__(self,
-                 in_size,
-                 out_size,
-                 rel_names,
-                 ntypes,
-                 attn_drop,
-                 num_bases,
-                 *,
-                 weight=True,
-                 bias=True,
-                 self_loop=True,
-                 dropout=0.2,
-                 num_heads=3):
-        super(AlphaAttention, self).__init__()
-        self.in_feat = in_size
-        self.out_feat = out_size
-        self.rel_names = rel_names
-        self.num_bases = num_bases
-        self.bias = bias
-        self.self_loop = self_loop
-
-        self.conv = BetaAttention({
-            rel: dgl.nn.pytorch.GATConv(in_size, out_size, num_heads=num_heads, residual=True, bias=True)
-            for rel in rel_names
-        }, attn_drop, ntypes, in_size, out_size)
-
-        if bias:
-            self.h_bias = nn.Parameter(th.Tensor(out_size))
-            nn.init.zeros_(self.h_bias)
-
-        if self.self_loop:
-            self.loop_weight = nn.Parameter(th.Tensor(in_size, out_size))
-            nn.init.xavier_uniform_(self.loop_weight,
-                                    gain=nn.init.calculate_gain('relu'))
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, g, inputs):
-        g = g.local_var()
-        wdict = {}
-        if g.is_block:
-            inputs_src = inputs
-            print("g isblock")
-            inputs_dst = {k: v[:g.number_of_dst_nodes(k)] for k, v in inputs.items()}
-        else:
-            inputs_src = inputs_dst = inputs
-        hs = self.conv(g, inputs)
-        hs = {k: th.mean(v, 1) for k, v in hs.items()}
-
-        def _apply(ntype, h):
-            if self.self_loop:
-                h = h + th.matmul(inputs_dst[ntype], self.loop_weight)
-            if self.bias:
-                h = h + self.h_bias
-            return self.dropout(h)
-
-        return {ntype: _apply(ntype, h) for ntype, h in hs.items()}
+drug = 'drug'
+protein = 'protein'
+disease = 'disease'
+sideeffect = 'sideeffect'
 
 
 class ScEncoder(nn.Module):
-    def __init__(self, in_feat, out_feat, rel_name, ntypes, attn_drop,
-                 num_bases, weight=True, bias=True, self_loop=True, dropout=0.5, num_heads=5):
+    def __init__(self, out_dim, keys):
         super(ScEncoder, self).__init__()
-        self.conv1 = AlphaAttention(in_feat, out_feat, rel_name, ntypes, attn_drop, num_bases, weight=weight, bias=bias,
-                                    self_loop=self_loop, dropout=dropout, num_heads=num_heads)
+        self.dim_embedding = out_dim
+        self.keys = keys
+        self.fc_DDI = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_D_ch = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_D_Di = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_D_Side = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_D_P = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_PPI = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_P_seq = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_P_Di = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_P_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_Di_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_Di_P = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        self.fc_Side_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
+        # self.semantics_attention = nn.ModuleDict({k: SemanticsAttention(out_dim, attn_drop=0.2) for k in keys})
+        self.reset_parameters()
 
-    def forward(self, g, inputs):
-        return self.conv1(g, inputs)
+    def reset_parameters(self):
+        for m in ScEncoder.modules(self):
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight.data, mean=0, std=0.1)
+                if m.bias is not None:
+                    m.bias.data.fill_(0.1)
+
+    def forward(self, drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
+                protein_sequence, protein_disease, drug_protein, node_feature: dict) -> dict:
+        disease_feature = node_feature[disease]
+        drug_feature = node_feature[drug]
+        protein_feature = node_feature[protein]
+        sideeffect_feature = node_feature[sideeffect]
+        node_feat = {}
+        disease_agg = [th.mm(row_normalize(drug_disease.T).float(), F.relu(self.fc_Di_D(drug_feature))),
+                       th.mm(row_normalize(protein_disease.T).float(), F.relu(self.fc_Di_P(protein_feature))),
+                       disease_feature]
+        drug_agg = [th.mm(row_normalize(drug_drug).float(), F.relu(self.fc_DDI(drug_feature))),
+                    th.mm(row_normalize(drug_chemical).float(), F.relu(self.fc_D_ch(drug_feature))),
+                    th.mm(row_normalize(drug_disease).float(), F.relu(self.fc_D_Di(disease_feature))),
+                    th.mm(row_normalize(drug_sideeffect).float(), F.relu(self.fc_D_Side(sideeffect_feature))),
+                    th.mm(row_normalize(drug_protein).float(), F.relu(self.fc_D_P(protein_feature))),
+                    drug_feature]
+        protein_agg = [th.mm(row_normalize(protein_protein).float(), F.relu(self.fc_PPI(protein_feature))),
+                       th.mm(row_normalize(protein_sequence).float(), F.relu(self.fc_P_seq(protein_feature))),
+                       th.mm(row_normalize(protein_disease).float(), F.relu(self.fc_P_Di(disease_feature))),
+                       th.mm(row_normalize(drug_protein.T).float(), F.relu(self.fc_P_D(drug_feature))),
+                       protein_feature]
+        sideeffect_agg = [th.mm(row_normalize(drug_sideeffect.T).float(), F.relu(self.fc_Side_D(drug_feature))),
+                          sideeffect_feature]
+        # agg_dict = {drug: drug_agg, protein: protein_agg, disease: disease_agg, sideeffect: sideeffect_agg}
+        # for k, v in agg_dict.items():
+        #     node_feat[k] = self.semantics_attention[k](agg_dict[k])
+        disease_feat = th.mean(th.stack(disease_agg, dim=1), dim=1)
+        drug_feat = th.mean(th.stack(drug_agg, dim=1), dim=1)
+        protein_feat = th.mean(th.stack(protein_agg, dim=1), dim=1)
+        sideeffect_feat = th.mean(th.stack(sideeffect_agg, dim=1), dim=1)
+        node_feat = {drug: drug_feat, protein: protein_feat, sideeffect: sideeffect_feat, disease: disease_feat}
+        return node_feat

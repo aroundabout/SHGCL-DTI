@@ -1,6 +1,7 @@
 import torch as th
 import torch.nn as nn
 
+
 class SemanticsAttention(nn.Module):
     def __init__(self, hidden_dim, attn_drop):
         super(SemanticsAttention, self).__init__()

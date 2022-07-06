@@ -4,7 +4,9 @@ import collections
 import urllib
 import math
 import pandas as pd
+import re
 import datetime
+from AutoCor import CalculateAutoTotal
 
 # some code from pydpi 1.0 because it's written in py2, i rewrite part of it
 
@@ -60,6 +62,23 @@ def getProteinSequence(UniportId: str) -> str:
     return GetProteinSequence(UniportId.strip())
 
 
+def Getkmers():
+    kmers = list()
+    for i in AALetter:
+        for j in AALetter:
+            for k in AALetter:
+                kmers.append(i + j + k)
+    return kmers
+
+
+def CalculateTripeptideComposition(proteinsequence):
+    result = {}
+    kmers = Getkmers()
+    for i in kmers:
+        result[i] = len(re.findall(i, proteinsequence))
+    return result
+
+
 # 二肽
 def CalculateDipeptideComposition(ProteinSequence):
     # 400
@@ -81,8 +100,18 @@ def CalculateAAComposition(ProteinSequence):
     return Result
 
 
+def getProteinFeatureAuto(sequence: str) -> str:
+    temp = CalculateAutoTotal(sequence)
+    di = collections.OrderedDict(temp)
+    ans = ""
+    for item in di.values():
+        ans += str(item) + " "
+    return ans
+
+
 def getProteinFeature(sequence: str) -> str:
-    dict = {**CalculateAAComposition(sequence), **CalculateDipeptideComposition(sequence)}
+    dict = {**CalculateAAComposition(sequence), **CalculateDipeptideComposition(sequence),
+            **CalculateTripeptideComposition(sequence)}
     dict = collections.OrderedDict(dict)
     ans = ""
     for item in dict.values():
@@ -232,8 +261,10 @@ def getProteinFinalFeature():
         if not seq.isalpha():
             seq = getProteinSequence(seq)
         protein_feature.append(getProteinFeature(seq))
+        # protein_feature.append(getProteinFeatureAuto(seq))
 
-    saveTxt(protein_feature, "../../data/feature/protein_feature_420.txt")
+    # saveTxt(protein_feature, "../../data/feature/protein_feature_420.txt")
+    saveTxt(protein_feature, "../../data/feature/protein_feature_8420.txt")
     # saveTxt(redirectMap2, "../../data/feature/RedirectMap2.txt")
 
 

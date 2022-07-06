@@ -1,30 +1,24 @@
 # -*- coding: utf-8 -*-
-import os
 import random
 import time
 import os
 
 import torch
 import torch as th
-from torch.utils.data import DataLoader
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
-import scipy.sparse as sp
 import sys
 
 sys.path.append('../')
 from data_process.GetMp import get_mp
+from data_process.GetPos import get_pos, get_sim_pos
 from model.SHGCL import SHGCL
 from tools.args import parse_args
-from tools.tools import load_data, ConstructGraph, load_feature, construct_postive_graph, \
-    sparse_mx_to_torch_sparse_tensor, l2_norm, concat_link, normalize_adj, compute_score, compute_loss, \
-    compute_auc_aupr
-from data_process.GetPos import get_pos
+from tools.tools import load_data, ConstructGraph, load_feature, load_feature2, load_feature_ori, compute_auc_aupr
 import warnings
 
 warnings.filterwarnings('ignore')
 
-# 常量
 DR_DR_V = 'drug_drug virtual'
 PR_PR_V = 'protein_protein virtual'
 DI_DI_V = 'disease_disease virtual'
@@ -89,30 +83,10 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
     hetero_graph = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
                                   protein_sequence, protein_disease, drug_protein)
     dti_np = drug_protein.numpy()
-    drdrdr, drprdr, drprprdr, drprdrprdr, drprdiprdr, prdrpr, prprpr, prdrprdrpr, prprprpr, prdrdrpr = \
-        get_mp(drug_drug, dti_np, drug_disease, drug_sideeffect, protein_protein, protein_disease, device)
-    # drprdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.coo_matrix(np.matmul(dti_np, dti_np.T)))).to(device)
-    # drdrdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drdrdr.npz'))).to(device)
-    # drprprdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drprprdr.npz'))).to(device)
-    # drprdrprdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drprdrprdr.npz'))).to(device)
-    # drprdiprdr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drprdiprdr.npz'))).to(device)
-    # prdrpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.coo_matrix(np.matmul(dti_np.T, dti_np)))).to(device)
-    # prprpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prprpr.npz'))).to(device)
-    # prdrprdrpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prdrprdrpr.npz'))).to(device)
-    # prprprpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prprprpr.npz'))).to(device)
-    # prdrdrpr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prdrdrpr.npz'))).to(device)
-    # # sedrse = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/sedrse.npz'))).to(device)
-    # # drdidr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drdidr.npz'))).to(device)
-    # # drsedr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/drsedr.npz'))).to(device)
-    # # prdipr = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/prdipr.npz'))).to(device)
-    # # didrdi = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/didrdi.npz'))).to(device)
-    # # diprdi = sparse_mx_to_torch_sparse_tensor(normalize_adj(sp.load_npz('../../data/mp/diprdi.npz'))).to(device)
-    # # mps_dict = {drug: [drdrdr, drprdr], protein: [prdrpr, prprpr], disease: [didrdi, diprdi], sideeffect: [sedrse]}
-    mps_dict = {drug: [drdrdr, drprdr, drprprdr, drprdrprdr, drprdiprdr],
-                protein: [prdrpr, prprpr, prdrprdrpr, prprprpr, prdrdrpr],
-                disease: [],
-                sideeffect: []}
     pos_dict = get_pos(hetero_graph, device)
+    # pos_dict = get_sim_pos(hetero_graph, device)
+    mps_dict = get_mp(drug_drug, dti_np, drug_disease, drug_sideeffect, protein_protein, protein_disease, device)
+
     mp_len_dict = {k: len(v) for k, v in mps_dict.items()}
     drug_dr = th.tensor(drug_drug).to(device)
     drug_ch = th.tensor(drug_chemical).to(device)
@@ -123,9 +97,9 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
     protein_di = th.tensor(protein_disease).to(device)
     drug_pr = drug_protein.to(device)
 
-    node_feature = load_feature()
+    node_feature, feat_dim = load_feature_ori()
     keys = [drug, protein, disease, sideeffect]
-    model = SHGCL(args.hid_dim, args, keys, mp_len_dict, args.attn_drop).to(device)
+    model = SHGCL(args.hid_dim, args, keys, mp_len_dict, args.attn_drop, feat_dim).to(device)
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)
     model_dir = '../bestmodel/SHGCL' + dir_name
     if not retrain and os.path.exists(model_dir):
@@ -153,6 +127,7 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
         th.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         model.eval()
+
         with th.no_grad():
             val_pre = results[DTIvalid[:, 0], DTIvalid[:, 1]]
             valid_auc, valid_aupr = compute_auc_aupr(val_pre, val_label)
@@ -190,6 +165,10 @@ def main(random_seed, task_name, dti_path='mat_drug_protein.txt'):
         negative_sample_index = np.random.choice(np.arange(len(whole_negative_index)),
                                                  size=10 * len(whole_positive_index), replace=False)
         data_set = np.zeros((len(negative_sample_index) + len(whole_positive_index), 3), dtype=int)
+    elif args.number == 'one':
+        negative_sample_index = np.random.choice(np.arange(len(whole_negative_index)),
+                                                 size=1 * len(whole_positive_index), replace=False)
+        data_set = np.zeros((len(negative_sample_index) + len(whole_positive_index), 3), dtype=int)
     else:
         negative_sample_index = np.random.choice(np.arange(len(whole_negative_index)),
                                                  size=len(whole_negative_index), replace=False)
@@ -212,7 +191,7 @@ def main(random_seed, task_name, dti_path='mat_drug_protein.txt'):
     kf = StratifiedKFold(n_splits=10, random_state=0, shuffle=True)
     for fold_index, (train_index, test_index) in enumerate(kf.split(data_set[:, :2], data_set[:, 2])):
         train, DTItest = data_set[train_index], data_set[test_index]
-        DTItrain, DTIvalid = train_test_split(train, test_size=0.05, random_state=0)
+        DTItrain, DTIvalid = train_test_split(train, test_size=0.1, random_state=0)
         print("--------------------------------------------------------------")
         print("KFold ", str(fold_index), " of 10")
         print("--------------------------------------------------------------")
@@ -294,28 +273,40 @@ def setup_seed(s):
 
 
 if __name__ == "__main__":
+    # 修改区域
     task = args.task
-    # task = 'test002'
+    # task = 'cl0'
+    task = 'cl5000g2'
+    # task = 'test001'
+    description = '2048 drprdr drdrprdr drprprdr sc mp layers =2 没有注释掉那一部分'
+    file_name = ('' if task == 'benchmark' else '_' + task)
+    file_name = ''
+
     number = args.number
     edge_mask = args.edge_mask
-    file_name = ('' if task == 'benchmark' else '_' + task)
-    # file_name = ''
     print("----------------------------------------")
     print('task=', task, ' number=', number, ' filename=', file_name)
     print("----------------------------------------")
     now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    s = args.random_state
-    # file_name = ''
     print(now_time)
     task_file_name = task + number + edge_mask
+    # seeds = [11, 22, 33, 42, 99]
+    # seeds = [111, 333, 411, 611, 711]
+    seeds = [11, 22, 33, 42, 99, 111, 333, 411, 611, 711]
+    seeds = [33, 42, 99, 111, 333, 411, 611, 711]
+
+    print(seeds)
+    print(description)
     with open('../../result/' + task_file_name + '_auc', 'a') as f:
         f.write(now_time + '\n')
         f.write(str(args) + '\n')
+        f.write(str(seeds) + '\n')
+        f.write(description + '\n')
     with open('../../result/' + task_file_name + '_aupr', 'a') as f:
         f.write(now_time + '\n')
         f.write(str(args) + '\n')
-    # seeds = [11, 22, 33]
-    seeds = [11]
+        f.write(str(seeds) + '\n')
+        f.write(description + '\n')
     for select_seed in seeds:
         start = time.time()
         setup_seed(select_seed)

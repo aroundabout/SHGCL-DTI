@@ -1,1 +1,1 @@
-__all__ = ['contrast', 'MLPPredicator', 'mp_encoder', 'sc_encoder']
+__all__ = ['contrast', 'mp_encoder']

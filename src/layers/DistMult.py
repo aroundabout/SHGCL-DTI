@@ -81,7 +81,5 @@ class DistMult(nn.Module):
         other_loss = drug_drug_reconstruct_loss + drug_chemical_reconstruct_loss + drug_disease_reconstruct_loss + \
                      drug_sideeffect_reconstruct_loss + protein_protein_reconstruct_loss + \
                      protein_sequence_reconstruct_loss + protein_disease_reconstruct_loss
-
-        tloss = drug_protein_reconstruct_loss + 1.0 * other_loss
-
+        tloss = drug_protein_reconstruct_loss + other_loss
         return tloss, drug_protein_reconstruct

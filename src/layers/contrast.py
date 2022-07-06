@@ -17,7 +17,6 @@ class Contrast(nn.Module):
                 if isinstance(model, nn.Linear):
                     nn.init.xavier_normal_(model.weight, gain=1.414)
 
-
     def sim(self, z1, z2):
         z1_norm = torch.norm(z1, dim=-1, keepdim=True)
         z2_norm = torch.norm(z2, dim=-1, keepdim=True)
@@ -38,7 +37,8 @@ class Contrast(nn.Module):
 
         matrix_sc2mp = matrix_sc2mp / (torch.sum(matrix_sc2mp, dim=1).view(-1, 1) + 1e-8)
         lori_sc = -torch.log(matrix_sc2mp.mul(pos.to_dense()).sum(dim=-1)).mean()
-        return self.lam * lori_mp + (1 - self.lam) * lori_sc
+        # return self.lam * lori_mp + (1 - self.lam) * lori_sc
+        return lori_mp + lori_sc
 
     def forward(self, z_mp, z_sc, pos):
         sumLoss = 0

@@ -1,1 +1,1 @@
-__all__=['CoGnnNet']
+__all__=['SHGCL']

@@ -1,1 +1,1 @@
-__all__ = ['args', 'DTIDataSet', 'EarlyStopping', 'tools']
+__all__ = ['args', 'EarlyStopping', 'tools']
