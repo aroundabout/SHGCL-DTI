@@ -299,6 +299,8 @@ if __name__ == "__main__":
 
     print(seeds)
     print(description)
+
+    time_main_start = time.time()
     with open('../../result/' + task_file_name + '_auc', 'a') as f:
         f.write(now_time + '\n')
         f.write(str(args) + '\n')
@@ -322,3 +324,8 @@ if __name__ == "__main__":
             f.write(str(aupr) + '\n')
         end = time.time()
         print("Total time:", end - start)
+    time_main_end = time.time()
+    with open('../../result/' + task_file_name + '_auc', 'a') as f:
+        f.write(str(time_main_end-time_main_start)+'\n')
+    with open('../../result/' + task_file_name + '_aupr', 'a') as f:
+        f.write(str(time_main_end-time_main_start)+'\n')
