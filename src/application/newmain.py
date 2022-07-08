@@ -97,7 +97,7 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
     protein_di = th.tensor(protein_disease).to(device)
     drug_pr = drug_protein.to(device)
 
-    node_feature, feat_dim = load_feature_ori()
+    node_feature, feat_dim = load_feature()
     keys = [drug, protein, disease, sideeffect]
     model = SHGCL(args.hid_dim, args, keys, mp_len_dict, args.attn_drop, feat_dim).to(device)
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)
@@ -276,9 +276,10 @@ if __name__ == "__main__":
     # 修改区域
     task = args.task
     # task = 'cl0'
-    task = 'cl5000g2'
+    task = 'cl5000g1'
     # task = 'test001'
-    description = '2048 drprdr drdrprdr drprprdr sc mp layers =2 没有注释掉那一部分'
+    # description = '2048 drprdr drdrprdr drprprdr sc mp layers =2 没有注释掉那一部分'
+    description = '维度是2048 drprdr   cl=5000 层数均为2'
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
@@ -292,8 +293,9 @@ if __name__ == "__main__":
     task_file_name = task + number + edge_mask
     # seeds = [11, 22, 33, 42, 99]
     # seeds = [111, 333, 411, 611, 711]
-    seeds = [11, 22, 33, 42, 99, 111, 333, 411, 611, 711]
-    seeds = [33, 42, 99, 111, 333, 411, 611, 711]
+    # seeds = [11, 22, 33, 42, 99, 111, 333, 411, 611, 711]
+    seeds = [11, 22, 33, 42, 99]
+    # seeds = [111, 333, 411, 611, 711]
 
     print(seeds)
     print(description)

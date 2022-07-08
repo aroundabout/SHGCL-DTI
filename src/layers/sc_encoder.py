@@ -28,7 +28,6 @@ class ScEncoder(nn.Module):
         self.fc_Di_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
         self.fc_Di_P = nn.Linear(self.dim_embedding, self.dim_embedding).float()
         self.fc_Side_D = nn.Linear(self.dim_embedding, self.dim_embedding).float()
-        # self.semantics_attention = nn.ModuleDict({k: SemanticsAttention(out_dim, attn_drop=0.2) for k in keys})
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -44,7 +43,6 @@ class ScEncoder(nn.Module):
         drug_feature = node_feature[drug]
         protein_feature = node_feature[protein]
         sideeffect_feature = node_feature[sideeffect]
-        node_feat = {}
         disease_agg = [th.mm(row_normalize(drug_disease.T).float(), F.relu(self.fc_Di_D(drug_feature))),
                        th.mm(row_normalize(protein_disease.T).float(), F.relu(self.fc_Di_P(protein_feature))),
                        disease_feature]
@@ -61,12 +59,8 @@ class ScEncoder(nn.Module):
                        protein_feature]
         sideeffect_agg = [th.mm(row_normalize(drug_sideeffect.T).float(), F.relu(self.fc_Side_D(drug_feature))),
                           sideeffect_feature]
-        # agg_dict = {drug: drug_agg, protein: protein_agg, disease: disease_agg, sideeffect: sideeffect_agg}
-        # for k, v in agg_dict.items():
-        #     node_feat[k] = self.semantics_attention[k](agg_dict[k])
         disease_feat = th.mean(th.stack(disease_agg, dim=1), dim=1)
         drug_feat = th.mean(th.stack(drug_agg, dim=1), dim=1)
         protein_feat = th.mean(th.stack(protein_agg, dim=1), dim=1)
         sideeffect_feat = th.mean(th.stack(sideeffect_agg, dim=1), dim=1)
-        node_feat = {drug: drug_feat, protein: protein_feat, sideeffect: sideeffect_feat, disease: disease_feat}
-        return node_feat
+        return {drug: drug_feat, protein: protein_feat, sideeffect: sideeffect_feat, disease: disease_feat}

@@ -112,7 +112,7 @@ def get_pos(g, device):
     # drdidr = drdidr / (drdidr.sum(axis=-1) + 1e-12).reshape(-1, 1)
     # drug_all = (drdrdr + drprdr + drprprdr + drprdrprdr + drprdiprdr + coo_matrix(np.identity(drug_num))).A.astype(
     #     "float32")
-    drug_all = (drdr + drprdr + drprprdr + coo_matrix(np.identity(drug_num))).A.astype("float32")
+    # drug_all = (drdr + drprdr + drprprdr + coo_matrix(np.identity(drug_num))).A.astype("float32")
     drug_all = (drprdr + coo_matrix(np.identity(drug_num))).A.astype("float32")
     drug_pos = np.zeros((drug_num, drug_num))
     drug_pos = generate_pos(drug_all, drug_pos, drug_pos_num)
@@ -137,8 +137,8 @@ def get_pos(g, device):
     # prdipr = prdipr / (prdipr.sum(axis=-1) + 1e-12).reshape(-1, 1)
     # protein_all = (prdrpr + prprpr + prdrprdrpr + prprprpr + prdrdrpr + coo_matrix(np.identity(protein_num))).A.astype(
     #     "float32")
-    protein_all = (prpr + prdrpr + prdrdrpr + coo_matrix(np.identity(protein_num))).A.astype("float32")
-    protein_all = (prdrpr + coo_matrix(np.identity(protein_num))).A.astype("float32")
+    # protein_all = (prpr + prdrpr + prdrdrpr + coo_matrix(np.identity(protein_num))).A.astype("float32")
+    protein_all = (prdrpr  + coo_matrix(np.identity(protein_num))).A.astype("float32")
     protein_pos = np.zeros((protein_num, protein_num))
     protein_pos = generate_pos(protein_all, protein_pos, protein_pos_num)
 
@@ -158,11 +158,4 @@ def get_pos(g, device):
 
     pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
                 protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device)}
-    # pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
-    #             protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device),
-    #             sideeffect_pos: sparse_mx_to_torch_sparse_tensor(sideeffect_pos).to(device)}
-    # pos_dict = {drug: sparse_mx_to_torch_sparse_tensor(drug_pos).to(device),
-    #             protein: sparse_mx_to_torch_sparse_tensor(protein_pos).to(device),
-    #             disease: sparse_mx_to_torch_sparse_tensor(disease_pos).to(device),
-    #             sideeffect: sparse_mx_to_torch_sparse_tensor(sideeffect_pos).to(device)}
     return pos_dict

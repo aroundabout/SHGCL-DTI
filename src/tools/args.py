@@ -9,7 +9,7 @@ def parse_args():
     # 公用
     parser.add_argument("--in_dim", type=int, default=128,
                         help="dimension of embeddings")
-    parser.add_argument("--hid_dim", type=int, default=512,
+    parser.add_argument("--hid_dim", type=int, default=2048,
                         help="dimension of embeddings")
     parser.add_argument("--lr", type=float, default=0.001,
                         help="learning rate")
