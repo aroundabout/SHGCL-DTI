@@ -55,11 +55,11 @@ def get_mp(drug_drug, durg_protein, drug_disease, drug_se, protein_protein, prot
     disease = 'disease'
     sideeffect = 'sideeffect'
 
-    mps_dict = {drug: [drdrdr, drprdr, drprprdr, drprdrprdr, drprdiprdr],
-                protein: [prdrpr, prprpr, prdrprdrpr, prprprpr, prdrdrpr], disease: [], sideeffect: []}
-    mps_dict = {drug: [drprdr], protein: [prdrpr], disease: [], sideeffect: []}
-    # mps_dict = {drug: [drprdr, drprdrprdr], protein: [prdrpr, prdrprdrpr], disease: [], sideeffect: []}
-    # mps_dict = {drug: [drdr, drprdr, drprprdr], protein: [prpr, prdrpr, prdrdrpr], disease: [], sideeffect: []}
+    # mps_dict = {drug: [drdrdr, drprdr, drprprdr, drprdrprdr, drprdiprdr],
+    #             protein: [prdrpr, prprpr, prdrprdrpr, prprprpr, prdrdrpr], disease: [], sideeffect: []}
     # mps_dict = {drug: [drprdr], protein: [prdrpr], disease: [], sideeffect: []}
+    # mps_dict = {drug: [drprdr, drprdrprdr], protein: [prdrpr, prdrprdrpr], disease: [], sideeffect: []}
+    mps_dict = {drug: [drdr, drprdr, drprprdr], protein: [prpr, prdrpr, prdrdrpr], disease: [], sideeffect: []}
+    # mps_dict = {drug: [drprdr, drprprdr, drdrprdr], protein: [prdrpr, prdrdrpr, prprdrpr], disease: [], sideeffect: []}
 
     return mps_dict

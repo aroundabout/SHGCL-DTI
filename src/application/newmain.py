@@ -276,10 +276,10 @@ if __name__ == "__main__":
     # 修改区域
     task = args.task
     # task = 'cl0'
-    task = 'cl5000g1'
+    task = 'cl0g2'
     # task = 'test001'
     # description = '2048 drprdr drdrprdr drprprdr sc mp layers =2 没有注释掉那一部分'
-    description = '维度是2048 drprdr   cl=5000 层数均为2'
+    description = '维度是2048 cl=5000 元路径为drprdr drprprdr drdrprdr, g1中mp只有一层 g2中mp和sc=1 '
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
@@ -294,8 +294,8 @@ if __name__ == "__main__":
     # seeds = [11, 22, 33, 42, 99]
     # seeds = [111, 333, 411, 611, 711]
     # seeds = [11, 22, 33, 42, 99, 111, 333, 411, 611, 711]
-    seeds = [11, 22, 33, 42, 99]
-    # seeds = [111, 333, 411, 611, 711]
+    # seeds = [11, 22, 33, 42, 99]
+    seeds = [111, 333, 411]
 
     print(seeds)
     print(description)
@@ -326,6 +326,6 @@ if __name__ == "__main__":
         print("Total time:", end - start)
     time_main_end = time.time()
     with open('../../result/' + task_file_name + '_auc', 'a') as f:
-        f.write(str(time_main_end-time_main_start)+'\n')
+        f.write(str(time_main_end - time_main_start) + '\n')
     with open('../../result/' + task_file_name + '_aupr', 'a') as f:
-        f.write(str(time_main_end-time_main_start)+'\n')
+        f.write(str(time_main_end - time_main_start) + '\n')

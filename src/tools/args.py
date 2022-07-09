@@ -27,7 +27,7 @@ def parse_args():
                         help='')
     parser.add_argument("--lam", type=float, default=0.5,
                         help='')
-    parser.add_argument("--cl", type=float, default=5000,
+    parser.add_argument("--cl", type=float, default=0,
                         help='')
     parser.add_argument("--reg_lambda", type=float, default=0.5,
                         help='')

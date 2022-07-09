@@ -113,7 +113,7 @@ def get_pos(g, device):
     # drug_all = (drdrdr + drprdr + drprprdr + drprdrprdr + drprdiprdr + coo_matrix(np.identity(drug_num))).A.astype(
     #     "float32")
     # drug_all = (drdr + drprdr + drprprdr + coo_matrix(np.identity(drug_num))).A.astype("float32")
-    drug_all = (drprdr + coo_matrix(np.identity(drug_num))).A.astype("float32")
+    drug_all = (drprdr + drprdrprdr + coo_matrix(np.identity(drug_num))).A.astype("float32")
     drug_pos = np.zeros((drug_num, drug_num))
     drug_pos = generate_pos(drug_all, drug_pos, drug_pos_num)
 
@@ -138,7 +138,7 @@ def get_pos(g, device):
     # protein_all = (prdrpr + prprpr + prdrprdrpr + prprprpr + prdrdrpr + coo_matrix(np.identity(protein_num))).A.astype(
     #     "float32")
     # protein_all = (prpr + prdrpr + prdrdrpr + coo_matrix(np.identity(protein_num))).A.astype("float32")
-    protein_all = (prdrpr  + coo_matrix(np.identity(protein_num))).A.astype("float32")
+    protein_all = (prdrpr + prdrprdrpr + coo_matrix(np.identity(protein_num))).A.astype("float32")
     protein_pos = np.zeros((protein_num, protein_num))
     protein_pos = generate_pos(protein_all, protein_pos, protein_pos_num)
 
