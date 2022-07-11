@@ -11,10 +11,10 @@ import sys
 
 sys.path.append('../')
 from data_process.GetMp import get_mp
-from data_process.GetPos import get_pos, get_sim_pos
+from data_process.GetPos import get_pos
 from model.SHGCL import SHGCL
 from tools.args import parse_args
-from tools.tools import load_data, ConstructGraph, load_feature, load_feature2, load_feature_ori, compute_auc_aupr
+from tools.tools import load_data, ConstructGraph, load_feature, compute_auc_aupr
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -70,7 +70,7 @@ DIDRDI, DIPRDI = 'DIDRDI', "DIPRDI"
 
 
 def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical, drug_disease,
-                     drug_sideeffect, protein_protein, protein_sequence, protein_disease, dir_name, retrain=False):
+                     drug_sideeffect, protein_protein, protein_sequence, protein_disease):
     best_valid_aupr, test_aupr, test_auc, patience = 0., 0., 0., 0.
     train_label = th.tensor(DTItrain[:, 2], dtype=th.float).reshape(-1, 1).to(device)
     val_label = th.tensor(DTIvalid[:, 2], dtype=th.float).reshape(-1, 1).to(device)
@@ -79,12 +79,11 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
     mask = th.zeros((drug_len, protein_len)).to(device)
     for ele in DTItrain:
         drug_protein[ele[0], ele[1]], mask[ele[0], ele[1]] = ele[2], 1
-
+    # 使用训练集的数据生成图 防止数据泄漏
     hetero_graph = ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein,
                                   protein_sequence, protein_disease, drug_protein)
     dti_np = drug_protein.numpy()
     pos_dict = get_pos(hetero_graph, device)
-    # pos_dict = get_sim_pos(hetero_graph, device)
     mps_dict = get_mp(drug_drug, dti_np, drug_disease, drug_sideeffect, protein_protein, protein_disease, device)
 
     mp_len_dict = {k: len(v) for k, v in mps_dict.items()}
@@ -101,33 +100,19 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
     keys = [drug, protein, disease, sideeffect]
     model = SHGCL(args.hid_dim, args, keys, mp_len_dict, args.attn_drop, feat_dim).to(device)
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)
-    model_dir = '../bestmodel/SHGCL' + dir_name
-    if not retrain and os.path.exists(model_dir):
-        model.load_state_dict(th.load(model_dir))
-        model.eval()
-        with torch.no_grad():
-            tloss, dp_re = model(drug_dr, drug_ch, drug_di, drug_se, protein_pr,
-                                 protein_seq, protein_di, drug_pr, mask, mps_dict, pos_dict, args.cl,
-                                 node_feature)
-            test_pre = dp_re.detach()[DTItest[:, 0], DTItest[:, 1]]
-            test_auc, test_aupr = compute_auc_aupr(test_pre, test_label)
-        return test_auc, test_aupr
 
     for i in range(args.epochs):
         model.train()
-        tloss, dp_re = model(drug_dr, drug_ch, drug_di, drug_se, protein_pr,
-                             protein_seq, protein_di, drug_pr, mask, mps_dict, pos_dict, args.cl,
-                             node_feature)
+        loss, dp_re = model(drug_dr, drug_ch, drug_di, drug_se, protein_pr, protein_seq, protein_di, drug_pr,
+                            mask, mps_dict, pos_dict, args.cl, node_feature)
         results = dp_re.detach()
         train_pre = results[DTItrain[:, 0], DTItrain[:, 1]]
         train_auc, train_aupr = compute_auc_aupr(train_pre, train_label)
-        loss = tloss
         optimizer.zero_grad()
         loss.backward()
         th.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         model.eval()
-
         with th.no_grad():
             val_pre = results[DTIvalid[:, 0], DTIvalid[:, 1]]
             valid_auc, valid_aupr = compute_auc_aupr(val_pre, val_label)
@@ -150,8 +135,6 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
 
 def main(random_seed, task_name, dti_path='mat_drug_protein.txt'):
     drug_d, drug_ch, drug_di, drug_side, protein_p, protein_seq, protein_di, dti_original = load_data(dti_path)
-
-    # sampling
     whole_positive_index = []
     whole_negative_index = []
     for i in range(np.shape(dti_original)[0]):
@@ -160,7 +143,6 @@ def main(random_seed, task_name, dti_path='mat_drug_protein.txt'):
                 whole_positive_index.append([i, j])
             elif int(dti_original[i][j]) == 0:
                 whole_negative_index.append([i, j])
-
     if args.number == 'ten':
         negative_sample_index = np.random.choice(np.arange(len(whole_negative_index)),
                                                  size=10 * len(whole_positive_index), replace=False)
@@ -196,10 +178,8 @@ def main(random_seed, task_name, dti_path='mat_drug_protein.txt'):
         print("KFold ", str(fold_index), " of 10")
         print("--------------------------------------------------------------")
         time_roundStart = time.time()
-        dir_name = '_task_' + task_name + '_' + args.number + '_rs' + str(random_seed) + '_fold' + str(
-            fold_index) + '_' + str(args) + '.pt'
         t_auc, t_aupr = TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_d, drug_ch, drug_di, drug_side,
-                                         protein_p, protein_seq, protein_di, dir_name)
+                                         protein_p, protein_seq, protein_di)
         test_auc_fold.append(t_auc)
         test_aupr_fold.append(t_aupr)
         time_roundEnd = time.time()
@@ -256,11 +236,9 @@ def main_unique(random_seed, task_name='unique'):
     print('random_seed=', str(random_seed), 'task=', task_name)
     print("----------------------------------------")
     train_all, DTItest = data_set, data_set_test
-    DTItrain, DTIvalid = train_test_split(train_all, test_size=0.05, random_state=0)
-    dir_name = '_task_' + task_name + '_' + args.number + '_rs' + str(random_seed) + '_fold' + str(-1) + '_' + str(
-        args) + '.pt'
+    DTItrain, DTIvalid = train_test_split(train_all, test_size=0.1, random_state=0)
     t_auc, t_aupr = TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_d, drug_ch, drug_di, drug_side,
-                                     protein_p, protein_seq, protein_di, dir_name)
+                                     protein_p, protein_seq, protein_di)
     return t_auc, t_aupr
 
 
@@ -273,13 +251,11 @@ def setup_seed(s):
 
 
 if __name__ == "__main__":
-    # 修改区域
     task = args.task
     # task = 'cl0'
-    task = 'cl0g2'
+    task = 'cl5000g1'
     # task = 'test001'
-    # description = '2048 drprdr drdrprdr drprprdr sc mp layers =2 没有注释掉那一部分'
-    description = '维度是2048 cl=5000 元路径为drprdr drprprdr drdrprdr, g1中mp只有一层 g2中mp和sc=1 '
+    description = '维度是2048  g1元路径为drprdr drprprdr drdrprdr pos分别为drprdr 和3个的哪个 cl=5000 测试一下benchmark的设置'
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
@@ -291,12 +267,7 @@ if __name__ == "__main__":
     now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     print(now_time)
     task_file_name = task + number + edge_mask
-    # seeds = [11, 22, 33, 42, 99]
-    # seeds = [111, 333, 411, 611, 711]
-    # seeds = [11, 22, 33, 42, 99, 111, 333, 411, 611, 711]
-    # seeds = [11, 22, 33, 42, 99]
-    seeds = [111, 333, 411]
-
+    seeds = [242, 22, 33, 299, 2711, 111, 333, 411, 611, 3222]
     print(seeds)
     print(description)
 

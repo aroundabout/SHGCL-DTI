@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class Contrast(nn.Module):
-    def __init__(self, out_dim, tau, lam, keys):
+    def __init__(self, out_dim, tau, keys):
         super(Contrast, self).__init__()
         self.proj = nn.ModuleDict({k: nn.Sequential(
             nn.Linear(out_dim, out_dim),
@@ -11,7 +11,6 @@ class Contrast(nn.Module):
             nn.Linear(out_dim, out_dim)
         ) for k in keys})
         self.tau = tau
-        self.lam = lam
         for k, v in self.proj.items():
             for model in v:
                 if isinstance(model, nn.Linear):
@@ -37,7 +36,6 @@ class Contrast(nn.Module):
 
         matrix_sc2mp = matrix_sc2mp / (torch.sum(matrix_sc2mp, dim=1).view(-1, 1) + 1e-8)
         lori_sc = -torch.log(matrix_sc2mp.mul(pos.to_dense()).sum(dim=-1)).mean()
-        # return self.lam * lori_mp + (1 - self.lam) * lori_sc
         return lori_mp + lori_sc
 
     def forward(self, z_mp, z_sc, pos):
