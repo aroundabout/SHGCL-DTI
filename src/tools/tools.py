@@ -15,7 +15,6 @@ sys.path.append('../')
 from tools.args import parse_args
 
 args = parse_args()
-
 device = args.device
 
 DR_DR_V = 'drug_drug virtual'
