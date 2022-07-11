@@ -6,7 +6,7 @@ def parse_args():
     parser.add_argument("--device", type=str, default='cuda:1')
     parser.add_argument("--epochs", type=int, default=5000,
                         help="number of training epochs")
-    parser.add_argument("--hid_dim", type=int, default=2048,
+    parser.add_argument("--hid_dim", type=int, default=1024,
                         help="dimension of embeddings")
     parser.add_argument("--lr", type=float, default=0.001,
                         help="learning rate")

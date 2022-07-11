@@ -189,10 +189,10 @@ def load_feature_8420():
 
 
 def load_feature_random():
-    disease_feats = torch.rand(5603 * 128).to(device)
-    drug_feats = torch.rand(708 * 128).to(device)
-    protein_feats = torch.rand(1512 * 128).to(device)
-    sideeffect_feats = torch.rand(4192 * 128).to(device)
+    disease_feats = torch.randn(5603 , 128).to(device)
+    drug_feats = torch.randn(708 , 128).to(device)
+    protein_feats = torch.randn(1512 , 128).to(device)
+    sideeffect_feats = torch.randn(4192 , 128).to(device)
     node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
                      sideeffect: sideeffect_feats}
     feat_dim = {drug: 128, protein: 128, disease: 128, sideeffect: 128}
@@ -200,12 +200,12 @@ def load_feature_random():
 
 
 def load_feature_luo():
-    disease_feats = torch.rand(5603 * 128).to(device)
+    disease_feats = torch.randn(5603 , 128).to(device)
     drug_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/drug_vector_d100.txt")).to(torch.float32).to(device)
     protein_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/protein_vector_d400.txt")).to(torch.float32).to(device)
-    sideeffect_feats = torch.rand(4192 * 128).to(device)
+    sideeffect_feats = torch.randn(4192 , 128).to(device)
     node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
                      sideeffect: sideeffect_feats}
     feat_dim = {drug: 100, protein: 400, disease: 128, sideeffect: 128}

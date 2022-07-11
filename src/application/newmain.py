@@ -253,9 +253,9 @@ def setup_seed(s):
 if __name__ == "__main__":
     task = args.task
     # task = 'cl0'
-    task = 'cl5000g1'
+    task = 'cl5000g2'
     # task = 'test001'
-    description = ''
+    description = '维度设置为1024 其它为默认设置'
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
