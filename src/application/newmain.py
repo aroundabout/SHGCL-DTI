@@ -255,7 +255,7 @@ if __name__ == "__main__":
     # task = 'cl0'
     task = 'cl5000g2'
     # task = 'test001'
-    description = '维度设置为1024 其它为默认设置'
+    description = ''
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
