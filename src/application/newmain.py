@@ -255,7 +255,7 @@ if __name__ == "__main__":
     # task = 'cl0'
     task = 'cl5000g1'
     # task = 'test001'
-    description = '维度是2048  g1元路径为drprdr drprprdr drdrprdr pos分别为drprdr 和3个的哪个 cl=5000 测试一下benchmark的设置'
+    description = ''
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
