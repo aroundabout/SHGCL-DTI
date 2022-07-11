@@ -28,6 +28,8 @@ def parse_args():
     # 控制实验
     parser.add_argument("--number", type=str, default='ten',
                         help='控制负样本比例 one1:1 ten为1:10 all为 全量')
+    parser.add_argument("--feature", type=str, default="default",
+                        help='设置实验用特征')
     parser.add_argument('--task', type=str, default='benchmark',
                         help='实验分为正常数据benchmark,其他是disease,drug,homo_protein_drug,sideeffect,uni等')
     parser.add_argument('--edge_mask', type=str, default='',

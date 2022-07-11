@@ -96,7 +96,7 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
     protein_di = th.tensor(protein_disease).to(device)
     drug_pr = drug_protein.to(device)
 
-    node_feature, feat_dim = load_feature()
+    node_feature, feat_dim = load_feature(args.feature)
     keys = [drug, protein, disease, sideeffect]
     model = SHGCL(args.hid_dim, args, keys, mp_len_dict, args.attn_drop, feat_dim).to(device)
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr)

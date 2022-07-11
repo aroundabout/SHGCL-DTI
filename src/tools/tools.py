@@ -6,7 +6,7 @@ import dgl
 import scipy.sparse as sp
 from dgl.heterograph import DGLHeteroGraph
 import torch
-from sklearn.metrics import roc_auc_score, f1_score, average_precision_score, precision_recall_curve, auc
+from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 from scipy.sparse import coo_matrix
 import torch as th
 import sys
@@ -133,7 +133,18 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     return torch.sparse.FloatTensor(indices, values, shape)
 
 
-def load_feature():
+def load_feature(choice='default'):
+    if choice == 'default':
+        return load_feature_default()
+    elif choice == 'random':
+        return load_feature_random()
+    elif choice == "luo":
+        return load_feature_luo()
+    else:
+        return load_feature_default()
+
+
+def load_feature_default():
     disease_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
     drug_feats = torch.from_numpy(
@@ -163,9 +174,9 @@ def load_feature_ori():
     return node_features, feat_dim
 
 
-def load_feature2():
+def load_feature_8420():
     disease_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
+        numpy.loadtxt("../../data/feature/disease_feature_8420.txt")).to(torch.float32).to(device)
     drug_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/drug_feature_167.txt")).to(torch.float32).to(device)
     protein_feats = torch.from_numpy(
@@ -177,22 +188,30 @@ def load_feature2():
     feat_dim = {drug: 167, protein: 8420, disease: 128, sideeffect: 128}
     return node_features, feat_dim
 
+
 def load_feature_random():
-    disease_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
-    drug_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/drug_feature_167.txt")).to(torch.float32).to(device)
-    protein_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/protein_feature_8420.txt")).to(torch.float32).to(device)
-    sideeffect_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32).to(device)
+    disease_feats = torch.rand(5603 * 128).to(device)
+    drug_feats = torch.rand(708 * 128).to(device)
+    protein_feats = torch.rand(1512 * 128).to(device)
+    sideeffect_feats = torch.rand(4192 * 128).to(device)
     node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
                      sideeffect: sideeffect_feats}
     feat_dim = {drug: 128, protein: 128, disease: 128, sideeffect: 128}
     return node_features, feat_dim
 
+
 def load_feature_luo():
-    return 1
+    disease_feats = torch.rand(5603 * 128).to(device)
+    drug_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/drug_vector_d100.txt")).to(torch.float32).to(device)
+    protein_feats = torch.from_numpy(
+        numpy.loadtxt("../../data/feature/protein_vector_d400.txt")).to(torch.float32).to(device)
+    sideeffect_feats = torch.rand(4192 * 128).to(device)
+    node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
+                     sideeffect: sideeffect_feats}
+    feat_dim = {drug: 100, protein: 400, disease: 128, sideeffect: 128}
+    return node_features, feat_dim
+
 
 def ConstructGraph(drug_drug, drug_chemical, drug_disease, drug_sideeffect, protein_protein, protein_sequence,
                    protein_disease, drug_protein, args=None, CO=True) -> DGLHeteroGraph:
@@ -451,11 +470,3 @@ def normalize_adj(adj):
     d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
     new_adj = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt) + d_self_loop
     return new_adj.tocoo()
-
-
-def setup_seed(s):
-    torch.manual_seed(s)
-    torch.cuda.manual_seed_all(s)
-    np.random.seed(s)
-    random.seed(s)
-    torch.backends.cudnn.deterministic = True
