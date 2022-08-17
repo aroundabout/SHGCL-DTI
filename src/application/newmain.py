@@ -252,6 +252,7 @@ def setup_seed(s):
     random.seed(s)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    os.environ['PYTHONHASHSEED'] = str(s)
 
 
 if __name__ == "__main__":
