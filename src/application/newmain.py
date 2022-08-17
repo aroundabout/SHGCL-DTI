@@ -253,6 +253,7 @@ def setup_seed(s):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     os.environ['PYTHONHASHSEED'] = str(s)
+    torch.use_deterministic_algorithms(True)
 
 
 if __name__ == "__main__":
