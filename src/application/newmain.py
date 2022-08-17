@@ -16,6 +16,9 @@ from model.SHGCL import SHGCL
 from tools.args import parse_args
 from tools.tools import load_data, ConstructGraph, load_feature, compute_auc_aupr
 import warnings
+import os
+
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
 
 warnings.filterwarnings('ignore')
 
