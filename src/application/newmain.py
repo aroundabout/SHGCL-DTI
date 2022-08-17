@@ -248,12 +248,13 @@ def setup_seed(s):
     np.random.seed(s)
     random.seed(s)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 if __name__ == "__main__":
     task = args.task
     # task = 'cl0'
-    task = 'cl5000g2'
+    task = 'g1'
     # task = 'test001'
     description = ''
     file_name = ('' if task == 'benchmark' else '_' + task)

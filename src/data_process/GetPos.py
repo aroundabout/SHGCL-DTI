@@ -33,8 +33,8 @@ SE_PR_A = 'sideeffect_protein association'
 SE_DI_A = 'sideeffect_disease association'
 SE_SE_A = 'sideeffect_sideeffect association'
 
-drug_pos_num = 40
-protein_pos_num = 40
+drug_pos_num = 10
+protein_pos_num = 5
 sideeffect_pos_num = 80
 disease_pos_num = 80
 
