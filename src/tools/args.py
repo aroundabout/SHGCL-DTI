@@ -3,7 +3,7 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='CoDTI')
-    parser.add_argument("--device", type=str, default='cuda:0')
+    parser.add_argument("--device", type=str, default='cuda:3')
     parser.add_argument("--epochs", type=int, default=5000,
                         help="number of training epochs")
     parser.add_argument("--hid_dim", type=int, default=2048,
@@ -16,11 +16,9 @@ def parse_args():
                         help="feat dropout")
     parser.add_argument("--attn_drop", type=float, default=0.2,
                         help="attn drop")
-    parser.add_argument("--multi_head", type=int, default=5,
-                        help='')
     parser.add_argument("--tau", type=float, default=0.5,
                         help='')
-    parser.add_argument("--cl", type=float, default=5000,
+    parser.add_argument("--cl", type=float, default=20000,
                         help='')
     parser.add_argument("--reg_lambda", type=float, default=0.5,
                         help='')

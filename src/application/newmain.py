@@ -65,7 +65,8 @@ disease_len = 5603
 args = parse_args()
 print(args)
 device = args.device
-
+seeds = [242, 22, 33, 299, 2711, 111, 333, 411, 611, 3222]
+seeds = [242, 456, 789]
 DRDRDR, DRPRDR, DRSEDR, DRDIDR = 'DRDRDR', 'DRPRDR', 'DRSEDR', 'DRDIDR'
 PRDRPR, PRPRPR, PRDIPR = 'PRDRPR', 'PRPRPR', 'PRDIPR'
 SEDRSE = 'SEDRSE'
@@ -129,7 +130,7 @@ def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical
                 if patience > args.patience:
                     print("Early Stopping")
                     break
-        if i % 25 == 0:
+        if i % 200 == 0:
             print(
                 "Epoch {:05d} | Train Loss {:02f} | Train auc {:.4f} | Train aupr {:.4f} | Val ROC_AUC {:.4f} | Val AUPR {:.4f} | Test ROC_AUC {:.4f} | Test AUPR {:.4f}"
                     .format(i, loss.item(), train_auc, train_aupr, valid_auc, valid_aupr, test_auc, test_aupr))
@@ -252,16 +253,14 @@ def setup_seed(s):
     random.seed(s)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    os.environ['PYTHONHASHSEED'] = str(s)
-    torch.use_deterministic_algorithms(True)
 
 
 if __name__ == "__main__":
     task = args.task
     # task = 'cl0'
-    task = 'g1'
+    task = 'g4'
     # task = 'test001'
-    description = ''
+    description = 'cl=20000 mp=drdr drprdr drprprdr'
     file_name = ('' if task == 'benchmark' else '_' + task)
     file_name = ''
 
@@ -273,7 +272,6 @@ if __name__ == "__main__":
     now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     print(now_time)
     task_file_name = task + number + edge_mask
-    seeds = [242, 22, 33, 299, 2711, 111, 333, 411, 611, 3222]
     print(seeds)
     print(description)
 
