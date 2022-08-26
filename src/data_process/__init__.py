@@ -1,3 +1,1 @@
-__all__ = ['GetMp', 'GetPos', 'GetProteinSequenceFromUniprot', 'GetSMILESFromDataBankXML',
-           'GetSideEffectAndDiseaseFromNode2vec', 'GetDrugFeatureByMACCSFingerprint',
-           'PCADecompositionOfDrugAndProtein']
+__all__ = ['GetMp', 'GetPos']

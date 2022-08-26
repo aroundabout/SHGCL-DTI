@@ -57,11 +57,6 @@ sideeffect_len = 4192
 disease_len = 5603
 
 
-def get_meta_path():
-    return [[DR_PR_I, PR_DR_I], [DR_PR_A, PR_DR_A],
-            [DR_DI_A, DI_PR_A]]
-
-
 def saveTxt(features: list[str], path: str):
     with open(path, "w") as f:
         for feature in features:
@@ -158,41 +153,11 @@ def load_feature_default():
     return node_features, feat_dim
 
 
-def load_feature_ori():
-    disease_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/disease_feature.txt")).to(torch.float32).to(device)
-    drug_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/drug_feature_167.txt")).to(torch.float32).to(device)
-    protein_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/protein_feature_420.txt")).to(torch.float32).to(device)
-    sideeffect_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32).to(device)
-    node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
-                     sideeffect: sideeffect_feats}
-    feat_dim = {drug: 167, protein: 420, disease: 128, sideeffect: 128}
-    return node_features, feat_dim
-
-
-def load_feature_8420():
-    disease_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/disease_feature_8420.txt")).to(torch.float32).to(device)
-    drug_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/drug_feature_167.txt")).to(torch.float32).to(device)
-    protein_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/protein_feature_8420.txt")).to(torch.float32).to(device)
-    sideeffect_feats = torch.from_numpy(
-        numpy.loadtxt("../../data/feature/sideeffect_feature.txt")).to(torch.float32).to(device)
-    node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
-                     sideeffect: sideeffect_feats}
-    feat_dim = {drug: 167, protein: 8420, disease: 128, sideeffect: 128}
-    return node_features, feat_dim
-
-
 def load_feature_random():
-    disease_feats = torch.randn(5603 , 128).to(device)
-    drug_feats = torch.randn(708 , 128).to(device)
-    protein_feats = torch.randn(1512 , 128).to(device)
-    sideeffect_feats = torch.randn(4192 , 128).to(device)
+    disease_feats = torch.randn(5603, 128).to(device)
+    drug_feats = torch.randn(708, 128).to(device)
+    protein_feats = torch.randn(1512, 128).to(device)
+    sideeffect_feats = torch.randn(4192, 128).to(device)
     node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
                      sideeffect: sideeffect_feats}
     feat_dim = {drug: 128, protein: 128, disease: 128, sideeffect: 128}
@@ -200,12 +165,12 @@ def load_feature_random():
 
 
 def load_feature_luo():
-    disease_feats = torch.randn(5603 , 128).to(device)
+    disease_feats = torch.randn(5603, 128).to(device)
     drug_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/drug_vector_d100.txt")).to(torch.float32).to(device)
     protein_feats = torch.from_numpy(
         numpy.loadtxt("../../data/feature/protein_vector_d400.txt")).to(torch.float32).to(device)
-    sideeffect_feats = torch.randn(4192 , 128).to(device)
+    sideeffect_feats = torch.randn(4192, 128).to(device)
     node_features = {drug: drug_feats, protein: protein_feats, disease: disease_feats,
                      sideeffect: sideeffect_feats}
     feat_dim = {drug: 100, protein: 400, disease: 128, sideeffect: 128}
@@ -320,127 +285,11 @@ def numConvert(num: int) -> str:
     return nid
 
 
-def getRandomWalkTrace(g: DGLHeteroGraph, args):
-    g_homo = dgl.convert.to_homogeneous(g)
-    # traces = dgl.sampling.node2vec_random_walk(g_homo, g_homo.nodes().numpy().tolist(), 1, 1,
-    #                                            walk_length=args.walk_length)
-    traces = dgl.sampling.random_walk(g_homo, g_homo.nodes().numpy().tolist(),
-                                      length=args.walk_length, restart_prob=args.alpha)[0]
-    traces = traces.numpy().tolist()
-
-    rwDict = {'DR': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])},
-              'PR': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])},
-              'DI': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])},
-              'SE': {'DR': ([], []), 'PR': ([], []), 'DI': ([], []), 'SE': ([], [])}}
-    edgeNameDict = {'DR': {'DR': (drug, DR_DR_A, drug),
-                           'PR': (drug, DR_PR_A, protein),
-                           'DI': (drug, DR_DI_A, disease),
-                           'SE': (drug, DR_SE_A, sideeffect)},
-                    'PR': {'DR': (protein, PR_DR_A, drug),
-                           'PR': (protein, PR_PR_A, protein),
-                           'DI': (protein, PR_DI_A, disease),
-                           'SE': (protein, PR_SE_A, sideeffect)},
-                    'DI': {'DR': (disease, DI_DR_A, drug),
-                           'PR': (disease, DI_PR_A, protein),
-                           'DI': (disease, DI_DI_A, disease),
-                           'SE': (disease, DI_SE_A, sideeffect)},
-                    'SE': {'DR': (sideeffect, SE_DR_A, drug),
-                           'PR': (sideeffect, SE_PR_A, protein),
-                           'DI': (sideeffect, SE_DI_A, disease),
-                           'SE': (sideeffect, SE_SE_A, sideeffect)}}
-    for trace in traces:
-        src = numConvert(trace[0])
-        for index, num in enumerate(trace):
-            if index == 0:
-                continue
-            dst = numConvert(num)
-            if int(dst[2:]) == -1:
-                # 对于孤立节点来说,他和自己链接不会导致特征的变化
-                # if index == 1:
-                #     rwDict[src[:2]][dst[:2]][0].append(int(src[2:]))
-                #     rwDict[src[:2]][dst[:2]][1].append(int(src[2:]))
-                break
-            rwDict[src[:2]][dst[:2]][0].append(int(src[2:]))
-            rwDict[src[:2]][dst[:2]][1].append(int(dst[2:]))
-    return rwDict, edgeNameDict
-
-
-def construct_negative_graph(graph, k, etype):
-    utype, _, vtype = etype
-    src, dst = graph.edges(etype=etype)
-    neg_src = src.repeat_interleave(k).cpu()
-    neg_dst = torch.randint(0, graph.num_nodes(vtype), (len(src) * k,))
-    list_drug = [(i, i) for i in range(drug_len)]
-    list_protein = [(i, i) for i in range(protein_len)]
-    hetero_graph = dgl.heterograph({etype: (neg_src, neg_dst),
-                                    (drug, DR_DR_V, drug): list_drug,
-                                    (protein, PR_PR_V, protein): list_protein})
-    hetero_graph = hetero_graph.edge_type_subgraph([DR_PR_I])
-    return hetero_graph
-
-
-def construct_postive_graph(dti, etype):
-    utype, _, vtype = etype
-    src, dst = dti
-    list_drug = [(i, i) for i in range(drug_len)]
-    list_protein = [(i, i) for i in range(protein_len)]
-    hetero_graph = dgl.heterograph({etype: (src, dst),
-                                    (drug, DR_DR_V, drug): list_drug,
-                                    (protein, PR_PR_V, protein): list_protein})
-    hetero_graph = hetero_graph.edge_type_subgraph([DR_PR_I])
-    return hetero_graph
-
-
-def predict_target_pair(pos_h, neg_h):
-    pre = torch.cat((pos_h, neg_h), 0).reshape(-1, 1).to(device)
-    target = torch.cat(
-        (torch.ones((len(pos_h), 1), dtype=torch.float), torch.zeros((len(neg_h), 1), dtype=torch.long)), 0).to(device)
-    return pre, target
-
-
-def compute_loss(pre, target, pos_weight=None):
-    crossentropyloss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    return crossentropyloss(pre, target)
-
-
-def binary_acc(preds, y):
-    preds = torch.round(torch.sigmoid(preds))
-    correct = torch.eq(preds, y).float()
-    acc = correct.sum() / len(correct)
-    return acc
-
-
 def compute_auc_aupr(pre, target):
     roc_auc = roc_auc_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
     precision, recall, threshold = precision_recall_curve(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
     aupr = auc(recall, precision)
     return roc_auc, aupr
-
-
-def compute_score(pre, target, pos_weight=None):
-    loss = compute_loss(pre, target, pos_weight=pos_weight)
-    roc_auc = roc_auc_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
-    precision, recall, threshold = precision_recall_curve(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
-    aupr = auc(recall, precision)
-    # aupr = average_precision_score(target.detach().cpu().numpy(), pre.detach().cpu().numpy())
-    return loss, roc_auc, aupr
-
-
-def concat_link(dti, feat_src, feat_dst):
-    return torch.cat([feat_src[dti[:, 0]], feat_dst[dti[:, 1]]], 1)
-
-
-def concat_link_pos(graph, feat_src, feat_dst, etype):
-    def concat_message_function(edges):
-        return {'cat_feat': torch.cat([edges.src['feature'], edges.dst['feature']], 1)}
-
-    with graph.local_scope():
-        graph.nodes['drug'].data['feature'] = feat_src
-        graph.nodes['protein'].data['feature'] = feat_dst
-        graph.apply_edges(concat_message_function, etype=etype)
-        pos_h = graph.edata.pop('cat_feat')
-
-    return pos_h
 
 
 def l2_norm(t, axit=1):

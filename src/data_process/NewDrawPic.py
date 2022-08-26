@@ -118,12 +118,12 @@ def getSensitivityLayers():
     row = 1
     col = 1
     x_data_list = [['1', '2', '3']]
-    y_data_list = [[[0.9550, 0.9582, 0.9548],
-                    [0.8765, 0.8838, 0.8775]]]
+    y_data_list = [[[0.9550, 0.9583, 0.9548],
+                    [0.8765, 0.8852, 0.8775]]]
     low_list = [0.8]
     high_list = [1]
-    std_err = [[[0.0015, 0.0016, 0.0017],
-                [0.0018, 0.0023, 0.0030]]]
+    std_err = [[[0.0015, 0.0013, 0.0017],
+                [0.0018, 0.0017, 0.0030]]]
     title_list = ['Different choices of GCN layers']
     return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'errorbar', False
 
@@ -132,12 +132,12 @@ def getSensitivityDims():
     row = 1
     col = 1
     x_data_list = [['512', '768', '1024', '1536', '2048', '3072']]
-    y_data_list = [[[0.9562, 0.9574, 0.9581, 0.9573, 0.9582, 0.9586],
-                    [0.8727, 0.8777, 0.8798, 0.8814, 0.8838, 0.8821]]]
+    y_data_list = [[[0.9562, 0.9574, 0.9581, 0.9573, 0.9583, 0.9586],
+                    [0.8727, 0.8777, 0.8798, 0.8814, 0.8852, 0.8821]]]
     low_list = [0.8]
     high_list = [1]
-    std_err = [[[0.0011, 0.0013, 0.0011, 0.0013, 0.0016, 0.0009],
-                [0.0013, 0.0025, 0.0019, 0.0019, 0.0023, 0.0018]]]
+    std_err = [[[0.0011, 0.0013, 0.0011, 0.0013, 0.0013, 0.0009],
+                [0.0013, 0.0025, 0.0019, 0.0019, 0.0017, 0.0018]]]
     title_list = ['Different choices of hidden dims']
     return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'errorbar', False
 
@@ -146,33 +146,33 @@ def getSensitivity():
     row = 1
     col = 2
     x_data_list = [['1', '2', '3'], ['512', '768', '1024', '1536', '2048', '3072']]
-    y_data_list = [[[0.9550, 0.9582, 0.9548],
-                    [0.8765, 0.8838, 0.8775]],
-                   [[0.9562, 0.9574, 0.9581, 0.9573, 0.9582, 0.9586],
-                    [0.8727, 0.8777, 0.8798, 0.8814, 0.8838, 0.8821]]]
+    y_data_list = [[[0.9550, 0.9583, 0.9548],
+                    [0.8765, 0.8852, 0.8775]],
+                   [[0.9562, 0.9574, 0.9581, 0.9573, 0.9583, 0.9586],
+                    [0.8727, 0.8777, 0.8798, 0.8814, 0.8852, 0.8821]]]
     low_list = [0.8, 0.8]
     high_list = [1, 1]
-    std_err = [[[0.0015, 0.0016, 0.0017],
-                [0.0018, 0.0023, 0.0030]],
-               [[0.0011, 0.0013, 0.0011, 0.0013, 0.0016, 0.0009],
-                [0.0013, 0.0025, 0.0019, 0.0019, 0.0023, 0.0018]]]
+    std_err = [[[0.0015, 0.0013, 0.0017],
+                [0.0018, 0.0017, 0.0030]],
+               [[0.0011, 0.0013, 0.0011, 0.0013, 0.0013, 0.0009],
+                [0.0013, 0.0025, 0.0019, 0.0019, 0.0017, 0.0018]]]
     title_list = ['Different choices of GCN layers', 'Different choices of hidden dims']
-    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'errorbar', True
+    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'errorbar', True, 'sens'
 
 
 def getCompareAuc():
     row = 2
     col = 3
     x_data_list = [['NetLapRLS', 'DTINet', 'NeoDTI', 'EEG-DTI', 'SHGCL-DTI'] * 1] * 6
-    y_data_list = [[0.9057, 0.9158, 0.9458, 0.9517, 0.9582],
+    y_data_list = [[0.9057, 0.9158, 0.9458, 0.9517, 0.9583],
                    [0.8893, 0.9070, 0.9147, 0.9524, 0.9232],
                    [0.8706, 0.8408, 0.8912, 0.8820, 0.9098],
                    [0.8978, 0.9063, 0.9329, 0.9368, 0.9483],
                    [0.8968, 0.9129, 0.9441, 0.9476, 0.9532],
                    [0.7485, 0.6752, 0.7373, 0.7045, 0.7615]]
-    low_list = [0.4, 0.4, 0.4, 0.4, 0.4, 0.4]
-    high_list = [1, 1, 1, 1, 1, 1]
-    std_err = [[0.0080, 0.0019, 0.0018, 0.0011, 0.0016],
+    low_list = [0.6, 0.6, 0.6, 0.6, 0.6, 0.4]
+    high_list = [1, 1, 1, 1, 1, 0.8]
+    std_err = [[0.0080, 0.0019, 0.0018, 0.0011, 0.0013],
                [0.0016, 0.0020, 0.0039, 0.0008, 0.0024],
                [0.0041, 0.0035, 0.0032, 0.0061, 0.0023],
                [0.0101, 0.0024, 0.0038, 0.0015, 0.0016],
@@ -184,14 +184,14 @@ def getCompareAuc():
                   'AUROC\npositive: negative=1:10\nDTIs with drugs sharing similar\ndrug interactions were removed',
                   'AUROC\npositive: negative=1:10\nDTIs with drugs sharing similar\nside-effect were removed',
                   'AUROC\ntrained on non-unique DTIs\ntested on unique DTIs\n ']
-    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'bar', True
+    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'bar', True, 'compareAuc'
 
 
 def getCompareAupr():
     row = 2
     col = 3
     x_data_list = [['NetLapRLS', 'DTINet', 'NeoDTI', 'EEG-DTI', 'SHGCL-DTI'] * 1] * 6
-    y_data_list = [[0.7474, 0.8183, 0.8528, 0.8442, 0.8838],
+    y_data_list = [[0.7474, 0.8183, 0.8528, 0.8442, 0.8852],
                    [0.4077, 0.4402, 0.5806, 0.1698, 0.6075],
                    [0.5967, 0.6099, 0.6868, 0.6753, 0.7382],
                    [0.7196, 0.7573, 0.8171, 0.8057, 0.8525],
@@ -199,7 +199,7 @@ def getCompareAupr():
                    [0.2726, 0.3778, 0.4304, 0.1867, 0.4505]]
     low_list = [0.4, 0, 0.4, 0.4, 0.4, 0]
     high_list = [0.9, 0.7, 0.8, 0.9, 0.9, 0.6]
-    std_err = [[0.0140, 0.0026, 0.0042, 0.0021, 0.0023],
+    std_err = [[0.0140, 0.0026, 0.0042, 0.0021, 0.0017],
                [0.0060, 0.0037, 0.0044, 0.0091, 0.0029],
                [0.0085, 0.0117, 0.0097, 0.0083, 0.0058],
                [0.0172, 0.0029, 0.0069, 0.0021, 0.0037],
@@ -211,7 +211,7 @@ def getCompareAupr():
                   'AUPR\npositive: negative=1:10\nDTIs with drugs sharing similar\ndrug interactions were removed',
                   'AUPR\npositive: negative=1:10\nDTIs with drugs sharing similar\nside-effect were removed',
                   'AUPR\ntrained on non-unique DTIs\ntested on unique DTIs\n ']
-    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'bar', True
+    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'bar', True, 'compareAupr'
 
 
 def getRoubest():
@@ -222,21 +222,21 @@ def getRoubest():
                    ['all network', 'Remove disease\nassociation network'],
                    ['all network', 'remove drug\nsimilarity network', 'remove protein\nsimilarity network',
                     'remove both']]
-    y_data_list = [[[0.9582, 0.9564], [0.8838, 0.8802]],
-                   [[0.9582, 0.9580, 0.9537, 0.9534], [0.8838, 0.8822, 0.8684, 0.8677]],
-                   [[0.9582, 0.9442], [0.8838, 0.8580]],
-                   [[0.9582, 0.9572, 0.9588, 0.9577], [0.8838, 0.8817, 0.8817, 0.8799]]]
-    low_list = [0.8, 0.8, 0.8, 0.8]
+    y_data_list = [[[0.9583, 0.9564], [0.8852, 0.8802]],
+                   [[0.9583, 0.9580, 0.9537, 0.9534], [0.8852, 0.8822, 0.8684, 0.8677]],
+                   [[0.9583, 0.9442], [0.8852, 0.8580]],
+                   [[0.9583, 0.9572, 0.9588, 0.9577], [0.8852, 0.8817, 0.8817, 0.8799]]]
+    low_list = [0.8, 0.8, 0.8, 0.85]
     high_list = [1, 1, 1, 1]
-    std_err = [[[0.0016, 0.0018, ], [0.0023, 0.0019]],
-               [[0.0016, 0.0010, 0.0014, 0.0011], [0.0023, 0.0013, 0.0017, 0.0017]],
-               [[0.0016, 0.0023], [0.0019, 0.0018]],
-               [[0.0016, 0.0011, 0.0014, 0.0006], [0.0023, 0.0013, 0.0023, 0.0017]]]
+    std_err = [[[0.0013, 0.0018], [0.0017, 0.0019]],
+               [[0.0013, 0.0010, 0.0014, 0.0011], [0.0017, 0.0013, 0.0017, 0.0017]],
+               [[0.0013, 0.0023], [0.0017, 0.0018]],
+               [[0.0013, 0.0011, 0.0014, 0.0006], [0.0017, 0.0013, 0.0023, 0.0017]]]
     title_list = ['Remove side-effect\nassociation network',
                   'Remove drug and\nprotein interaction networks',
                   'Remove disease\nassociation network',
                   'Remove drug and\nprotein similarity networks']
-    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'double', True
+    return row, col, x_data_list, y_data_list, low_list, high_list, std_err, title_list, 'double', True, 'rob'
 
 
 def getDefault(func=None):
@@ -253,6 +253,6 @@ def getDefault(func=None):
 
 
 if __name__ == '__main__':
-    r, c, x_list, y_list, l_list, h_list, e_list, t_list, dtype, isN = getDefault(getCompareAupr)
-    drawer = PicDrawer(x_size=18, y_size=9,dir='pic/compareAupr.svg')
+    r, c, x_list, y_list, l_list, h_list, e_list, t_list, dtype, isN, filename = getDefault(getSensitivity)
+    drawer = PicDrawer(x_size=18, y_size=9, dir='pic/' + filename + '.svg')
     drawer.drawMult(r, c, x_list, y_list, l_list, h_list, e_list, t_list, dtype, isN)
