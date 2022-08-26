@@ -2,8 +2,8 @@ import argparse
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='CoDTI')
-    parser.add_argument("--device", type=str, default='cuda:3')
+    parser = argparse.ArgumentParser(description='SHGCL-DTI')
+    parser.add_argument("--device", type=str, default='cuda:0')
     parser.add_argument("--epochs", type=int, default=5000,
                         help="number of training epochs")
     parser.add_argument("--hid_dim", type=int, default=2048,
