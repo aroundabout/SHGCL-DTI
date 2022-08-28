@@ -24,7 +24,7 @@ def parse_args():
                         help='')
 
     # 控制实验
-    parser.add_argument("--number", type=str, default='all',
+    parser.add_argument("--number", type=str, default='ten',
                         help='控制负样本比例 one1:1 ten为1:10 all为 全量')
     parser.add_argument("--feature", type=str, default="default",
                         help='设置实验用特征')
