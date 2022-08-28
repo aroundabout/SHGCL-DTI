@@ -66,11 +66,6 @@ args = parse_args()
 print(args)
 device = args.device
 seeds = [242, 22, 33, 299, 2711, 111, 333, 411, 611, 3222]
-seeds = [242, 456, 789]
-DRDRDR, DRPRDR, DRSEDR, DRDIDR = 'DRDRDR', 'DRPRDR', 'DRSEDR', 'DRDIDR'
-PRDRPR, PRPRPR, PRDIPR = 'PRDRPR', 'PRPRPR', 'PRDIPR'
-SEDRSE = 'SEDRSE'
-DIDRDI, DIPRDI = 'DIDRDI', "DIPRDI"
 
 
 def TrainAndEvaluate(DTItrain, DTIvalid, DTItest, args, drug_drug, drug_chemical, drug_disease,
@@ -258,11 +253,9 @@ def setup_seed(s):
 if __name__ == "__main__":
     task = args.task
     # task = 'cl0'
-    task = 'g4'
-    # task = 'test001'
+    task = 'g1'
     description = 'cl=20000 mp=drdr drprdr drprprdr'
     file_name = ('' if task == 'benchmark' else '_' + task)
-    file_name = ''
 
     number = args.number
     edge_mask = args.edge_mask
