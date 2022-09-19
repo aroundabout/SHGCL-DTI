@@ -252,9 +252,7 @@ def setup_seed(s):
 
 if __name__ == "__main__":
     task = args.task
-    # task = 'cl0'
-    task = 'g1'
-    description = 'cl=20000 mp=drdr drprdr drprprdr'
+    description = 'default'
     file_name = ('' if args.task == 'benchmark' else '_' + args.task)
 
     number = args.number
